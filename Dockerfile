@@ -23,4 +23,4 @@ COPY --from=build /workspace/apps/api apps/api
 COPY --from=build /workspace/apps/web/package.json apps/web/package.json
 
 EXPOSE 8000
-CMD ["pnpm", "--filter", "@animehub/api", "start:prod"]
+CMD ["sh", "-c", "pnpm --filter @animehub/api exec prisma migrate deploy && pnpm --filter @animehub/api start:prod"]

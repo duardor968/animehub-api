@@ -10,10 +10,22 @@ import { configureApp } from './configure-app';
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter(),
+    new FastifyAdapter({
+      logger: {
+        level: process.env.LOG_LEVEL ?? 'info',
+        redact: {
+          paths: [
+            'req.headers.authorization',
+            'req.body.password',
+            'res.headers.authorization',
+          ],
+          censor: '[Redacted]',
+        },
+      },
+    }),
   );
   const config = app.get(ConfigService);
-  configureApp(app);
+  await configureApp(app);
 
   const port = config.get<number>('PORT', 8000);
   await app.listen(port, '0.0.0.0');

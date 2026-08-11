@@ -1,0 +1,1019 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/health/live": {
+      "get": {
+        "operationId": "HealthController_live",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Comprueba que el proceso del API está activo",
+        "tags": ["health"]
+      }
+    },
+    "/api/v1/health/ready": {
+      "get": {
+        "operationId": "HealthController_ready",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Comprueba que PostgreSQL está disponible",
+        "tags": ["health"]
+      }
+    },
+    "/api/v1/home": {
+      "get": {
+        "operationId": "HomeController_getHome",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Devuelve portada, estrenos y añadidos recientes",
+        "tags": ["home"]
+      }
+    },
+    "/api/v1/catalog": {
+      "get": {
+        "operationId": "CatalogController_getCatalog",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Busca y filtra el catálogo paginado",
+        "tags": ["catalog"]
+      }
+    },
+    "/api/v1/catalog/suggestions": {
+      "get": {
+        "operationId": "CatalogController_getSuggestions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Devuelve hasta ocho sugerencias de búsqueda",
+        "tags": ["catalog"]
+      }
+    },
+    "/api/v1/anime/{slug}": {
+      "get": {
+        "operationId": "AnimeController_getAnime",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnimeResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Devuelve la ficha normalizada de un anime",
+        "tags": ["anime"]
+      }
+    },
+    "/api/v1/anime/{slug}/episodes": {
+      "get": {
+        "operationId": "AnimeController_getEpisodes",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EpisodePageResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Devuelve episodios en páginas de cincuenta",
+        "tags": ["anime"]
+      }
+    },
+    "/api/v1/schedule": {
+      "get": {
+        "operationId": "ScheduleController_getSchedule",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Devuelve el horario semanal estimado",
+        "tags": ["schedule"]
+      }
+    },
+    "/api/v1/anime/{slug}/downloads/resolve": {
+      "post": {
+        "operationId": "DownloadController_resolve",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveDownloadsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveDownloadsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Resuelve hasta cincuenta episodios por operación",
+        "tags": ["downloads"]
+      }
+    },
+    "/api/v1/anime/{slug}/download-jobs": {
+      "post": {
+        "operationId": "DownloadJobsController_create",
+        "parameters": [
+          {
+            "name": "slug",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDownloadJobDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadJobReceiptResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Crea un trabajo durable para una serie o rango",
+        "tags": ["download jobs"]
+      }
+    },
+    "/api/v1/download-jobs/{id}": {
+      "get": {
+        "operationId": "DownloadJobsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadJobResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Consulta progreso y resultados mediante capacidad",
+        "tags": ["download jobs"]
+      }
+    },
+    "/api/v1/download-jobs/{id}/retry": {
+      "post": {
+        "operationId": "DownloadJobsController_retry",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadJobResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reintenta únicamente episodios fallidos",
+        "tags": ["download jobs"]
+      }
+    },
+    "/api/v1/download-jobs/{id}/cancel": {
+      "post": {
+        "operationId": "DownloadJobsController_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadJobResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancela los ítems pendientes del trabajo",
+        "tags": ["download jobs"]
+      }
+    }
+  },
+  "info": {
+    "title": "AnimeHub API",
+    "description": "Contrato público REST compartido por AnimeHub Web y Desktop.",
+    "version": "1.0.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "CategoryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "name", "slug"]
+      },
+      "AnimeSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "synopsis": {
+            "type": "string",
+            "nullable": true
+          },
+          "posterUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "backdropUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "category": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CategoryDto"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["UNKNOWN", "AIRING", "FINISHED", "UPCOMING"]
+          },
+          "startDate": {
+            "type": "string",
+            "nullable": true
+          },
+          "mature": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "slug", "title", "status", "mature"]
+      },
+      "EpisodeDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "number": {
+            "type": "number"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "publishedAt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": ["id", "number"]
+      },
+      "RecentEpisodeDto": {
+        "type": "object",
+        "properties": {
+          "anime": {
+            "$ref": "#/components/schemas/AnimeSummaryDto"
+          },
+          "episode": {
+            "$ref": "#/components/schemas/EpisodeDto"
+          }
+        },
+        "required": ["anime", "episode"]
+      },
+      "HomeDataDto": {
+        "type": "object",
+        "properties": {
+          "featured": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnimeSummaryDto"
+            }
+          },
+          "recentEpisodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecentEpisodeDto"
+            }
+          },
+          "recentAnime": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnimeSummaryDto"
+            }
+          }
+        },
+        "required": ["featured", "recentEpisodes", "recentAnime"]
+      },
+      "FreshnessDto": {
+        "type": "object",
+        "properties": {
+          "fetchedAt": {
+            "type": "string"
+          },
+          "nextRefreshAt": {
+            "type": "string"
+          },
+          "stale": {
+            "type": "boolean"
+          }
+        },
+        "required": ["fetchedAt", "nextRefreshAt", "stale"]
+      },
+      "HomeResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/HomeDataDto"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/FreshnessDto"
+          }
+        },
+        "required": ["data", "meta"]
+      },
+      "CatalogMetaDto": {
+        "type": "object",
+        "properties": {
+          "fetchedAt": {
+            "type": "string"
+          },
+          "nextRefreshAt": {
+            "type": "string"
+          },
+          "stale": {
+            "type": "boolean"
+          },
+          "page": {
+            "type": "number"
+          },
+          "perPage": {
+            "type": "number"
+          },
+          "totalPages": {
+            "type": "number"
+          },
+          "totalRecords": {
+            "type": "number"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryDto"
+            }
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryDto"
+            }
+          },
+          "years": {
+            "minItems": 2,
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "fetchedAt",
+          "nextRefreshAt",
+          "stale",
+          "page",
+          "perPage",
+          "totalPages",
+          "totalRecords",
+          "categories",
+          "genres",
+          "years"
+        ]
+      },
+      "CatalogResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnimeSummaryDto"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/CatalogMetaDto"
+          }
+        },
+        "required": ["data", "meta"]
+      },
+      "SuggestionResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnimeSummaryDto"
+            }
+          }
+        },
+        "required": ["data"]
+      },
+      "RelationDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "PREQUEL",
+              "SEQUEL",
+              "MAIN_STORY",
+              "SIDE_STORY",
+              "SUMMARY",
+              "ALTERNATIVE",
+              "OTHER"
+            ]
+          },
+          "anime": {
+            "$ref": "#/components/schemas/AnimeSummaryDto"
+          },
+          "position": {
+            "type": "number"
+          }
+        },
+        "required": ["kind", "anime", "position"]
+      },
+      "AnimeDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "synopsis": {
+            "type": "string",
+            "nullable": true
+          },
+          "posterUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "backdropUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "category": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CategoryDto"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["UNKNOWN", "AIRING", "FINISHED", "UPCOMING"]
+          },
+          "startDate": {
+            "type": "string",
+            "nullable": true
+          },
+          "mature": {
+            "type": "boolean"
+          },
+          "alternativeTitle": {
+            "type": "string",
+            "nullable": true
+          },
+          "trailerUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "endDate": {
+            "type": "string",
+            "nullable": true
+          },
+          "nextEpisodeAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "episodeCount": {
+            "type": "number",
+            "nullable": true
+          },
+          "score": {
+            "type": "number",
+            "nullable": true
+          },
+          "votes": {
+            "type": "number",
+            "nullable": true
+          },
+          "sourceUrl": {
+            "type": "string"
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryDto"
+            }
+          },
+          "relations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelationDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "title",
+          "status",
+          "mature",
+          "sourceUrl",
+          "genres",
+          "relations"
+        ]
+      },
+      "AnimeResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AnimeDetailDto"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/FreshnessDto"
+          }
+        },
+        "required": ["data", "meta"]
+      },
+      "EpisodePageMetaDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number"
+          },
+          "perPage": {
+            "type": "number"
+          },
+          "totalPages": {
+            "type": "number"
+          },
+          "totalRecords": {
+            "type": "number"
+          }
+        },
+        "required": ["page", "perPage", "totalPages", "totalRecords"]
+      },
+      "EpisodePageResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EpisodeDto"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/EpisodePageMetaDto"
+          }
+        },
+        "required": ["data", "meta"]
+      },
+      "ScheduleEntryDto": {
+        "type": "object",
+        "properties": {
+          "anime": {
+            "$ref": "#/components/schemas/AnimeSummaryDto"
+          },
+          "latestEpisode": {
+            "$ref": "#/components/schemas/EpisodeDto"
+          },
+          "basisPublishedAt": {
+            "type": "string"
+          }
+        },
+        "required": ["anime", "latestEpisode", "basisPublishedAt"]
+      },
+      "ScheduleResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduleEntryDto"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/FreshnessDto"
+          }
+        },
+        "required": ["data", "meta"]
+      },
+      "ResolveDownloadsDto": {
+        "type": "object",
+        "properties": {
+          "episodeNumbers": {
+            "minItems": 1,
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "audio": {
+            "type": "string",
+            "enum": ["SUB", "DUB"]
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["MEGA", "PIXELDRAIN", "MP4UPLOAD", "ONE_FICHIER"]
+            }
+          },
+          "refresh": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": ["episodeNumbers", "audio", "providers"]
+      },
+      "ResolvedLinkDto": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["MEGA", "PIXELDRAIN", "MP4UPLOAD", "ONE_FICHIER"]
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": ["provider", "url"]
+      },
+      "ResolvedEpisodeDto": {
+        "type": "object",
+        "properties": {
+          "episodeNumber": {
+            "type": "number"
+          },
+          "audio": {
+            "type": "string",
+            "enum": ["SUB", "DUB"]
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResolvedLinkDto"
+            }
+          },
+          "errorCode": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": ["episodeNumber", "audio", "links"]
+      },
+      "ResolveDownloadsDataDto": {
+        "type": "object",
+        "properties": {
+          "packageName": {
+            "type": "string"
+          },
+          "episodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResolvedEpisodeDto"
+            }
+          }
+        },
+        "required": ["packageName", "episodes"]
+      },
+      "ResolveDownloadsResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ResolveDownloadsDataDto"
+          }
+        },
+        "required": ["data"]
+      },
+      "CreateDownloadJobDto": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": ["ALL", "RANGE"]
+          },
+          "audio": {
+            "type": "string",
+            "enum": ["SUB", "DUB"]
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["MEGA", "PIXELDRAIN", "MP4UPLOAD", "ONE_FICHIER"]
+            }
+          },
+          "from": {
+            "type": "number"
+          },
+          "to": {
+            "type": "number"
+          }
+        },
+        "required": ["scope", "audio", "providers"]
+      },
+      "DownloadJobReceiptDto": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string"
+          },
+          "accessToken": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": ["jobId", "accessToken", "expiresAt"]
+      },
+      "DownloadJobReceiptResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DownloadJobReceiptDto"
+          }
+        },
+        "required": ["data"]
+      },
+      "DownloadJobDataDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "QUEUED",
+              "RUNNING",
+              "COMPLETED",
+              "PARTIAL",
+              "FAILED",
+              "CANCELLED"
+            ]
+          },
+          "packageName": {
+            "type": "string"
+          },
+          "totalItems": {
+            "type": "number"
+          },
+          "completedItems": {
+            "type": "number"
+          },
+          "failedItems": {
+            "type": "number"
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "episodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResolvedEpisodeDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "packageName",
+          "totalItems",
+          "completedItems",
+          "failedItems",
+          "expiresAt",
+          "episodes"
+        ]
+      },
+      "DownloadJobResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DownloadJobDataDto"
+          }
+        },
+        "required": ["data"]
+      }
+    }
+  }
+}

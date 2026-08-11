@@ -1,4 +1,5 @@
 import { ServiceUnavailableException } from '@nestjs/common';
+import { vi } from 'vitest';
 import { HealthService } from './health.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -16,9 +17,7 @@ describe('HealthService', () => {
 
   it('reports database failures without leaking their details', async () => {
     const prisma = {
-      $queryRaw: jest
-        .fn()
-        .mockRejectedValue(new Error('secret connection data')),
+      $queryRaw: vi.fn().mockRejectedValue(new Error('secret connection data')),
     } as unknown as PrismaService;
     const service = new HealthService(prisma);
 

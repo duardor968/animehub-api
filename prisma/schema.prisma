@@ -12,3 +12,268 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum AnimeStatus {
+  UNKNOWN
+  AIRING
+  FINISHED
+  UPCOMING
+}
+
+enum SourceAvailability {
+  AVAILABLE
+  UNAVAILABLE
+}
+
+enum SnapshotKind {
+  HOME_FEATURED
+  HOME_RECENT_EPISODES
+  HOME_RECENT_ANIME
+  CATALOG
+  SCHEDULE
+}
+
+enum RelationKind {
+  PREQUEL
+  SEQUEL
+  MAIN_STORY
+  SIDE_STORY
+  SUMMARY
+  ALTERNATIVE
+  OTHER
+}
+
+enum AudioType {
+  SUB
+  DUB
+}
+
+enum DownloadProvider {
+  MEGA
+  PIXELDRAIN
+  MP4UPLOAD
+  ONE_FICHIER
+}
+
+enum DownloadJobStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  PARTIAL
+  FAILED
+  CANCELLED
+}
+
+enum DownloadJobItemStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model Category {
+  id       String  @id @default(cuid())
+  sourceId String  @unique
+  name     String
+  slug     String  @unique
+  anime    Anime[]
+}
+
+model Genre {
+  id       String       @id @default(cuid())
+  sourceId String       @unique
+  name     String
+  slug     String       @unique
+  anime    AnimeGenre[]
+}
+
+model AnimeGenre {
+  animeId String
+  genreId String
+  anime   Anime  @relation(fields: [animeId], references: [id], onDelete: Cascade)
+  genre   Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([animeId, genreId])
+}
+
+model Anime {
+  id                       String             @id @default(cuid())
+  sourceId                 String             @unique
+  slug                     String             @unique
+  title                    String
+  alternativeTitle         String?
+  synopsis                 String?
+  posterUrl                String?
+  backdropUrl              String?
+  trailerUrl               String?
+  status                   AnimeStatus        @default(UNKNOWN)
+  availability             SourceAvailability @default(AVAILABLE)
+  categoryId               String?
+  category                 Category?          @relation(fields: [categoryId], references: [id])
+  startDate                DateTime?
+  endDate                  DateTime?
+  nextEpisodeAt            DateTime?
+  latestEpisodePublishedAt DateTime?
+  episodeCount             Int?
+  score                    Float?
+  votes                    Int?
+  mature                   Boolean            @default(false)
+  sourceUrl                String
+  notFoundCount            Int                @default(0)
+  lastSeenAt               DateTime
+  lastFetchedAt            DateTime
+  detailFetchedAt          DateTime?
+  nextRefreshAt            DateTime
+  unchangedRefreshes       Int                @default(0)
+  contentHash              String?
+  genres                   AnimeGenre[]
+  episodes                 Episode[]
+  outgoingRelations        AnimeRelation[]    @relation("RelationSource")
+  incomingRelations        AnimeRelation[]    @relation("RelationTarget")
+  snapshotItems            SnapshotItem[]
+  downloadJobs             DownloadJob[]
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+
+  @@index([status, nextRefreshAt])
+  @@index([availability, title])
+}
+
+model Episode {
+  id            String            @id @default(cuid())
+  sourceId      String            @unique
+  animeId       String
+  anime         Anime             @relation(fields: [animeId], references: [id], onDelete: Cascade)
+  number        Float
+  title         String?
+  sourcePath    String
+  publishedAt   DateTime?
+  lastSeenAt    DateTime
+  links         DownloadLink[]
+  downloadProbe DownloadProbe?
+  snapshots     SnapshotItem[]
+  jobItems      DownloadJobItem[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@unique([animeId, number])
+  @@index([animeId, number])
+}
+
+model AnimeRelation {
+  id              String       @id @default(cuid())
+  sourceAnimeId   String
+  sourceAnime     Anime        @relation("RelationSource", fields: [sourceAnimeId], references: [id], onDelete: Cascade)
+  targetAnimeId   String?
+  targetAnime     Anime?       @relation("RelationTarget", fields: [targetAnimeId], references: [id], onDelete: SetNull)
+  targetSourceId  String?
+  targetSlug      String
+  targetTitle     String
+  targetPosterUrl String?
+  targetYear      Int?
+  kind            RelationKind
+  position        Int
+
+  @@unique([sourceAnimeId, targetSlug, kind])
+  @@index([sourceAnimeId, position])
+}
+
+model Snapshot {
+  id            String         @id @default(cuid())
+  key           String         @unique
+  kind          SnapshotKind
+  fetchedAt     DateTime
+  nextRefreshAt DateTime
+  totalPages    Int?
+  totalRecords  Int?
+  minYear       Int?
+  maxYear       Int?
+  items         SnapshotItem[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([kind, nextRefreshAt])
+}
+
+model SnapshotItem {
+  snapshotId String
+  animeId    String
+  episodeId  String?
+  position   Int
+  label      String?
+  snapshot   Snapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  anime      Anime    @relation(fields: [animeId], references: [id], onDelete: Cascade)
+  episode    Episode? @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+
+  @@id([snapshotId, position])
+  @@index([animeId])
+}
+
+model DownloadLink {
+  id        String           @id @default(cuid())
+  episodeId String
+  episode   Episode          @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  audio     AudioType
+  provider  DownloadProvider
+  url       String
+  fetchedAt DateTime
+  expiresAt DateTime
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([episodeId, audio, provider, url])
+  @@index([episodeId, expiresAt])
+}
+
+model DownloadProbe {
+  episodeId String   @id
+  episode   Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  fetchedAt DateTime
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+}
+
+model DownloadJob {
+  id              String             @id @default(cuid())
+  animeId         String
+  anime           Anime              @relation(fields: [animeId], references: [id], onDelete: Cascade)
+  accessTokenHash String             @unique
+  status          DownloadJobStatus  @default(QUEUED)
+  requestedAudio  AudioType
+  providers       DownloadProvider[]
+  packageName     String
+  totalItems      Int
+  completedItems  Int                @default(0)
+  failedItems     Int                @default(0)
+  expiresAt       DateTime
+  startedAt       DateTime?
+  completedAt     DateTime?
+  items           DownloadJobItem[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([status, createdAt])
+  @@index([expiresAt])
+}
+
+model DownloadJobItem {
+  id            String                @id @default(cuid())
+  jobId         String
+  job           DownloadJob           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  episodeId     String
+  episode       Episode               @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  status        DownloadJobItemStatus @default(PENDING)
+  resolvedAudio AudioType?
+  links         Json?
+  errorCode     String?
+  attempts      Int                   @default(0)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@unique([jobId, episodeId])
+  @@index([jobId, status])
+}

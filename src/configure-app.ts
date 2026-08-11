@@ -1,8 +1,12 @@
 import { ConfigService } from '@nestjs/config';
+import { ValidationPipe } from '@nestjs/common';
 import { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
+import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
+import { ProblemDetailsFilter } from './common/problem-details.filter';
 
-export function configureApp(app: NestFastifyApplication) {
+export async function configureApp(app: NestFastifyApplication) {
   const config = app.get(ConfigService);
   const origins = config
     .get<string>('CORS_ORIGINS', 'http://localhost:3000')
@@ -11,15 +15,41 @@ export function configureApp(app: NestFastifyApplication) {
     .filter(Boolean);
 
   app.setGlobalPrefix('api/v1');
-  app.enableCors({ origin: origins });
+  app.enableCors({ origin: origins, methods: ['GET', 'POST', 'OPTIONS'] });
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
+  app.useGlobalFilters(new ProblemDetailsFilter());
+  await app.register(helmet as never, {
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'same-site' },
+  });
+  await app.register(rateLimit as never, {
+    max: 120,
+    timeWindow: '1 minute',
+  });
 
+  const document = createOpenApiDocument(app);
+  SwaggerModule.setup('docs', app, document, {
+    jsonDocumentUrl: '/openapi.json',
+  });
+  return document;
+}
+
+export function createOpenApiDocument(
+  app: NestFastifyApplication,
+): OpenAPIObject {
   const openApiConfig = new DocumentBuilder()
     .setTitle('AnimeHub API')
     .setDescription(
       'Contrato público REST compartido por AnimeHub Web y Desktop.',
     )
-    .setVersion('0.1.0')
+    .setVersion('1.0.0')
+    .addBearerAuth()
     .build();
-  const document = SwaggerModule.createDocument(app, openApiConfig);
-  SwaggerModule.setup('docs', app, document);
+  return SwaggerModule.createDocument(app, openApiConfig);
 }
