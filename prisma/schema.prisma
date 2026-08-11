@@ -147,6 +147,7 @@ model Episode {
   anime         Anime             @relation(fields: [animeId], references: [id], onDelete: Cascade)
   number        Float
   title         String?
+  imageUrl      String?
   sourcePath    String
   publishedAt   DateTime?
   lastSeenAt    DateTime

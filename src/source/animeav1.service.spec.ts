@@ -36,7 +36,17 @@ describe('AnimeAv1Service', () => {
             genres: [{ id: 3, name: 'Acción' }],
           },
         ],
-        latestEpisodes: [],
+        latestEpisodes: [
+          {
+            id: 71,
+            number: 4,
+            media: {
+              id: 7,
+              slug: 'sample-anime',
+              title: 'Sample Anime',
+            },
+          },
+        ],
         latestMedia: [],
       }),
     );
@@ -55,6 +65,11 @@ describe('AnimeAv1Service', () => {
       mature: true,
       posterUrl: 'https://cdn.animeav1.com/covers/7.jpg',
       genres: [{ id: '3', name: 'Acción', slug: 'accion' }],
+    });
+    expect(home.recentEpisodes[0]?.episode).toMatchObject({
+      id: '71',
+      number: 4,
+      imageUrl: 'https://cdn.animeav1.com/screenshots/7/4.jpg',
     });
   });
 

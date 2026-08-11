@@ -26,6 +26,7 @@ export interface SourceEpisode {
   id: string;
   number: number;
   title: string | null;
+  imageUrl: string;
   sourcePath: string;
   publishedAt: Date | null;
 }

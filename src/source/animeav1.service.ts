@@ -145,7 +145,11 @@ export class AnimeAv1Service {
       featured: data.featured.map((anime) => this.normalizeAnime(anime)),
       recentEpisodes: data.latestEpisodes.map((episode) => ({
         anime: this.normalizeAnime(episode.media),
-        episode: this.normalizeEpisode(episode, episode.media.slug),
+        episode: this.normalizeEpisode(
+          episode,
+          episode.media.slug,
+          String(episode.media.id),
+        ),
       })),
       recentAnime: data.latestMedia.map((anime) => this.normalizeAnime(anime)),
     };
@@ -189,7 +193,7 @@ export class AnimeAv1Service {
       score: media.score ?? null,
       votes: media.votes ?? null,
       episodes: media.episodes.map((episode) =>
-        this.normalizeEpisode(episode, media.slug),
+        this.normalizeEpisode(episode, media.slug, String(media.id)),
       ),
       relations: (media.relations ?? []).map((relation) =>
         this.normalizeRelation(relation.type, relation.destination),
@@ -204,7 +208,11 @@ export class AnimeAv1Service {
         ? [
             {
               anime: this.normalizeAnime(anime),
-              episode: this.normalizeEpisode(anime.latestEpisode, anime.slug),
+              episode: this.normalizeEpisode(
+                anime.latestEpisode,
+                anime.slug,
+                String(anime.id),
+              ),
             },
           ]
         : [],
@@ -231,7 +239,11 @@ export class AnimeAv1Service {
     }
     return {
       anime: this.normalizeAnime(data.media),
-      episode: this.normalizeEpisode(data.episode, data.media.slug),
+      episode: this.normalizeEpisode(
+        data.episode,
+        data.media.slug,
+        String(data.media.id),
+      ),
       links,
     };
   }
@@ -319,11 +331,13 @@ export class AnimeAv1Service {
   private normalizeEpisode(
     input: z.infer<typeof episodeSchema>,
     slug: string,
+    animeId: string,
   ): SourceEpisode {
     return {
       id: String(input.id),
       number: input.number,
       title: input.title?.trim() || null,
+      imageUrl: `https://cdn.animeav1.com/screenshots/${animeId}/${input.number}.jpg`,
       sourcePath: `/media/${slug}/${input.number}`,
       publishedAt: this.toDate(input.publishedAt ?? input.createdAt),
     };

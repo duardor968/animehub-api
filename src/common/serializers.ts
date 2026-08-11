@@ -43,6 +43,7 @@ interface EpisodeRecord {
   sourceId: string;
   number: number;
   title: string | null;
+  imageUrl: string | null;
   publishedAt: Date | null;
 }
 
@@ -81,6 +82,7 @@ export function serializeEpisode(episode: EpisodeRecord): EpisodeDto {
     id: episode.sourceId,
     number: episode.number,
     title: episode.title,
+    imageUrl: episode.imageUrl,
     publishedAt: episode.publishedAt?.toISOString() ?? null,
   };
 }

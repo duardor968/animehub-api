@@ -29,6 +29,8 @@ export class EpisodeDto {
   @ApiProperty() id!: string;
   @ApiProperty() number!: number;
   @ApiPropertyOptional({ type: String, nullable: true }) title!: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) imageUrl!:
+    string | null;
   @ApiPropertyOptional({ type: String, nullable: true }) publishedAt!:
     string | null;
 }

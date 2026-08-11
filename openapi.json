@@ -462,6 +462,10 @@
             "type": "string",
             "nullable": true
           },
+          "imageUrl": {
+            "type": "string",
+            "nullable": true
+          },
           "publishedAt": {
             "type": "string",
             "nullable": true
