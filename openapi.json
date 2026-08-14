@@ -47,46 +47,6 @@
         "tags": ["home"]
       }
     },
-    "/api/v1/catalog": {
-      "get": {
-        "operationId": "CatalogController_getCatalog",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CatalogResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Busca y filtra el catálogo paginado",
-        "tags": ["catalog"]
-      }
-    },
-    "/api/v1/catalog/suggestions": {
-      "get": {
-        "operationId": "CatalogController_getSuggestions",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuggestionResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "summary": "Devuelve hasta ocho sugerencias de búsqueda",
-        "tags": ["catalog"]
-      }
-    },
     "/api/v1/anime/{slug}": {
       "get": {
         "operationId": "AnimeController_getAnime",
@@ -143,6 +103,46 @@
         },
         "summary": "Devuelve episodios en páginas de cincuenta",
         "tags": ["anime"]
+      }
+    },
+    "/api/v1/catalog": {
+      "get": {
+        "operationId": "CatalogController_getCatalog",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Busca y filtra el catálogo paginado",
+        "tags": ["catalog"]
+      }
+    },
+    "/api/v1/catalog/suggestions": {
+      "get": {
+        "operationId": "CatalogController_getSuggestions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Devuelve hasta ocho sugerencias de búsqueda",
+        "tags": ["catalog"]
       }
     },
     "/api/v1/schedule": {
@@ -402,6 +402,67 @@
         },
         "required": ["id", "name", "slug"]
       },
+      "FeaturedAnimeDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "synopsis": {
+            "type": "string",
+            "nullable": true
+          },
+          "posterUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "backdropUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "category": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CategoryDto"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["UNKNOWN", "AIRING", "FINISHED", "UPCOMING"]
+          },
+          "startDate": {
+            "type": "string",
+            "nullable": true
+          },
+          "mature": {
+            "type": "boolean"
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryDto"
+            }
+          },
+          "episodeCount": {
+            "type": "number",
+            "nullable": true
+          },
+          "trailerUrl": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": ["id", "slug", "title", "status", "mature", "genres"]
+      },
       "AnimeSummaryDto": {
         "type": "object",
         "properties": {
@@ -491,7 +552,7 @@
           "featured": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/AnimeSummaryDto"
+              "$ref": "#/components/schemas/FeaturedAnimeDto"
             }
           },
           "recentEpisodes": {
@@ -535,91 +596,6 @@
           }
         },
         "required": ["data", "meta"]
-      },
-      "CatalogMetaDto": {
-        "type": "object",
-        "properties": {
-          "fetchedAt": {
-            "type": "string"
-          },
-          "nextRefreshAt": {
-            "type": "string"
-          },
-          "stale": {
-            "type": "boolean"
-          },
-          "page": {
-            "type": "number"
-          },
-          "perPage": {
-            "type": "number"
-          },
-          "totalPages": {
-            "type": "number"
-          },
-          "totalRecords": {
-            "type": "number"
-          },
-          "categories": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CategoryDto"
-            }
-          },
-          "genres": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CategoryDto"
-            }
-          },
-          "years": {
-            "minItems": 2,
-            "maxItems": 2,
-            "type": "array",
-            "items": {
-              "type": "number"
-            }
-          }
-        },
-        "required": [
-          "fetchedAt",
-          "nextRefreshAt",
-          "stale",
-          "page",
-          "perPage",
-          "totalPages",
-          "totalRecords",
-          "categories",
-          "genres",
-          "years"
-        ]
-      },
-      "CatalogResponseDto": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AnimeSummaryDto"
-            }
-          },
-          "meta": {
-            "$ref": "#/components/schemas/CatalogMetaDto"
-          }
-        },
-        "required": ["data", "meta"]
-      },
-      "SuggestionResponseDto": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AnimeSummaryDto"
-            }
-          }
-        },
-        "required": ["data"]
       },
       "RelationDto": {
         "type": "object",
@@ -788,6 +764,91 @@
           }
         },
         "required": ["data", "meta"]
+      },
+      "CatalogMetaDto": {
+        "type": "object",
+        "properties": {
+          "fetchedAt": {
+            "type": "string"
+          },
+          "nextRefreshAt": {
+            "type": "string"
+          },
+          "stale": {
+            "type": "boolean"
+          },
+          "page": {
+            "type": "number"
+          },
+          "perPage": {
+            "type": "number"
+          },
+          "totalPages": {
+            "type": "number"
+          },
+          "totalRecords": {
+            "type": "number"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryDto"
+            }
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryDto"
+            }
+          },
+          "years": {
+            "minItems": 2,
+            "maxItems": 2,
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "fetchedAt",
+          "nextRefreshAt",
+          "stale",
+          "page",
+          "perPage",
+          "totalPages",
+          "totalRecords",
+          "categories",
+          "genres",
+          "years"
+        ]
+      },
+      "CatalogResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnimeSummaryDto"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/CatalogMetaDto"
+          }
+        },
+        "required": ["data", "meta"]
+      },
+      "SuggestionResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AnimeSummaryDto"
+            }
+          }
+        },
+        "required": ["data"]
       },
       "ScheduleEntryDto": {
         "type": "object",

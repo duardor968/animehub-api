@@ -1,7 +1,12 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { AnimeService } from '../anime/anime.service';
 import { SnapshotKind } from '../generated/prisma/enums';
 import { HomeResponseDto } from '../common/contracts';
-import { serializeAnime, serializeEpisode } from '../common/serializers';
+import {
+  serializeAnime,
+  serializeEpisode,
+  serializeFeatured,
+} from '../common/serializers';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectionService } from '../projection/projection.service';
 import { AnimeAv1Service } from '../source/animeav1.service';
@@ -14,6 +19,7 @@ export class HomeService {
     private readonly prisma: PrismaService,
     private readonly projection: ProjectionService,
     private readonly source: AnimeAv1Service,
+    private readonly animeService: AnimeService,
   ) {}
 
   async getHome(): Promise<HomeResponseDto> {
@@ -34,7 +40,7 @@ export class HomeService {
     return {
       data: {
         featured: (byKind.get('HOME_FEATURED')?.items ?? []).map(({ anime }) =>
-          serializeAnime(anime),
+          serializeFeatured(anime),
         ),
         recentEpisodes: (
           byKind.get('HOME_RECENT_EPISODES')?.items ?? []
@@ -67,8 +73,23 @@ export class HomeService {
       const featured = await Promise.all(
         home.featured.map((anime) => this.projection.upsertAnime(anime)),
       );
+      await Promise.allSettled(
+        home.featured
+          .slice(0, 2)
+          .map((anime) => this.animeService.getAnime(anime.slug)),
+      );
+      const enrichedRecentAnime = await Promise.all(
+        home.recentAnime.map(async (anime) => {
+          if (anime.startDate && anime.category && anime.synopsis) return anime;
+          try {
+            return await this.source.getAnime(anime.slug);
+          } catch {
+            return anime;
+          }
+        }),
+      );
       const recentAnime = await Promise.all(
-        home.recentAnime.map((anime) => this.projection.upsertAnime(anime)),
+        enrichedRecentAnime.map((anime) => this.projection.upsertAnime(anime)),
       );
       const recentEpisodes = [];
       for (const item of home.recentEpisodes) {
@@ -126,7 +147,12 @@ export class HomeService {
         items: {
           orderBy: { position: 'asc' as const },
           include: {
-            anime: { include: { category: true } },
+            anime: {
+              include: {
+                category: true,
+                genres: { include: { genre: true } },
+              },
+            },
             episode: true,
           },
         },

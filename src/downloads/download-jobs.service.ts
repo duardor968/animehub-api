@@ -292,16 +292,29 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
   private serialize(
     job: Awaited<ReturnType<DownloadJobsService['authorize']>>,
   ) {
+    const completedItems = job.items.filter(
+      (item) => item.status === DownloadJobItemStatus.COMPLETED,
+    ).length;
+    const failedItems = job.items.filter(
+      (item) => item.status === DownloadJobItemStatus.FAILED,
+    ).length;
     return {
       id: job.id,
       status: job.status,
       packageName: job.packageName,
       totalItems: job.totalItems,
-      completedItems: job.completedItems,
-      failedItems: job.failedItems,
+      // Item state is the live source of truth while a bulk job is running.
+      // The aggregate columns are finalized only when the worker completes.
+      completedItems,
+      failedItems,
       expiresAt: job.expiresAt.toISOString(),
       episodes: job.items
-        .filter((item) => item.status !== DownloadJobItemStatus.PENDING)
+        .filter(
+          (item) =>
+            item.status === DownloadJobItemStatus.COMPLETED ||
+            item.status === DownloadJobItemStatus.FAILED ||
+            item.status === DownloadJobItemStatus.CANCELLED,
+        )
         .map((item): ResolvedEpisodeDto => ({
           episodeNumber: item.episode.number,
           audio: (item.resolvedAudio ??

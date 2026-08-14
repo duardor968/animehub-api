@@ -90,8 +90,18 @@ export class CatalogService {
           }),
         ),
       ]);
+      const enriched = await Promise.all(
+        source.results.map(async (entry) => {
+          if (entry.startDate && entry.category && entry.synopsis) return entry;
+          try {
+            return await this.source.getAnime(entry.slug);
+          } catch {
+            return entry;
+          }
+        }),
+      );
       const anime = await Promise.all(
-        source.results.map((entry) => this.projection.upsertAnime(entry)),
+        enriched.map((entry) => this.projection.upsertAnime(entry)),
       );
       const snapshot = await this.projection.replaceSnapshot(
         key,

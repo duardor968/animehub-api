@@ -40,6 +40,18 @@ const sourceMock = {
     ],
     recentAnime: [sourceAnime],
   }),
+  getAnime: jest.fn().mockResolvedValue({
+    ...sourceAnime,
+    alternativeTitle: 'Fixture Alternative',
+    trailerUrl: 'https://www.youtube-nocookie.com/watch?v=fixture',
+    endDate: null,
+    nextEpisodeAt: null,
+    episodeCount: 12,
+    score: 8.1,
+    votes: 1200,
+    episodes: [],
+    relations: [],
+  }),
 };
 
 describe('AppController (e2e)', () => {
@@ -103,7 +115,12 @@ describe('AppController (e2e)', () => {
       .expect(200)
       .expect(({ body }: { body: { data?: { featured?: unknown[] } } }) => {
         expect(body.data?.featured).toEqual([
-          expect.objectContaining({ slug: 'fixture-anime' }),
+          expect.objectContaining({
+            slug: 'fixture-anime',
+            episodeCount: 12,
+            trailerUrl: 'https://www.youtube-nocookie.com/watch?v=fixture',
+            genres: [],
+          }),
         ]);
       });
   });

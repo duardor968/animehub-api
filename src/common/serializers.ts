@@ -3,6 +3,7 @@ import {
   AnimeSummaryDto,
   CategoryDto,
   EpisodeDto,
+  FeaturedAnimeDto,
   RelationDto,
 } from './contracts';
 
@@ -74,6 +75,15 @@ export function serializeAnime(anime: AnimeRecord): AnimeSummaryDto {
     status: anime.status,
     startDate: anime.startDate?.toISOString() ?? null,
     mature: anime.mature,
+  };
+}
+
+export function serializeFeatured(anime: AnimeRecord): FeaturedAnimeDto {
+  return {
+    ...serializeAnime(anime),
+    genres: (anime.genres ?? []).map(({ genre }) => serializeCategory(genre)),
+    episodeCount: anime.episodeCount ?? null,
+    trailerUrl: anime.trailerUrl ?? null,
   };
 }
 

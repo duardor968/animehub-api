@@ -52,13 +52,16 @@ export class ProjectionService {
       update: {
         slug: source.slug,
         title: source.title,
-        synopsis: source.synopsis,
+        synopsis: source.synopsis ?? undefined,
         posterUrl: source.posterUrl,
         backdropUrl: source.backdropUrl,
-        status: source.status as AnimeStatus,
+        status:
+          source.status === 'UNKNOWN'
+            ? undefined
+            : (source.status as AnimeStatus),
         availability: SourceAvailability.AVAILABLE,
-        categoryId: category?.id ?? null,
-        startDate: source.startDate,
+        categoryId: category?.id,
+        startDate: source.startDate ?? undefined,
         mature: source.mature,
         sourceUrl: `https://animeav1.com/media/${source.slug}`,
         lastSeenAt: now,

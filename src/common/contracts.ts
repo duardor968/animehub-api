@@ -25,6 +25,14 @@ export class AnimeSummaryDto {
   @ApiProperty() mature!: boolean;
 }
 
+export class FeaturedAnimeDto extends AnimeSummaryDto {
+  @ApiProperty({ type: [CategoryDto] }) genres!: CategoryDto[];
+  @ApiPropertyOptional({ type: Number, nullable: true }) episodeCount!:
+    number | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) trailerUrl!:
+    string | null;
+}
+
 export class EpisodeDto {
   @ApiProperty() id!: string;
   @ApiProperty() number!: number;
@@ -47,7 +55,7 @@ export class FreshnessDto {
 }
 
 export class HomeDataDto {
-  @ApiProperty({ type: [AnimeSummaryDto] }) featured!: AnimeSummaryDto[];
+  @ApiProperty({ type: [FeaturedAnimeDto] }) featured!: FeaturedAnimeDto[];
   @ApiProperty({ type: [RecentEpisodeDto] })
   recentEpisodes!: RecentEpisodeDto[];
   @ApiProperty({ type: [AnimeSummaryDto] }) recentAnime!: AnimeSummaryDto[];
