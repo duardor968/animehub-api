@@ -15,6 +15,9 @@ FROM node:24-alpine AS runtime
 
 ENV NODE_ENV=production
 RUN corepack enable
+# curl for the container healthcheck (Alpine has no curl; BusyBox wget lacks
+# the GNU --spider/--tries flags). Matches the sibling projects' images.
+RUN apk add --no-cache curl
 WORKDIR /workspace
 
 COPY --from=build /workspace/package.json /workspace/pnpm-lock.yaml /workspace/pnpm-workspace.yaml ./
