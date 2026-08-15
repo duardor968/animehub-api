@@ -51,9 +51,15 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     if (this.config.get<string>('JOBS_ENABLED', 'true') === 'false') return;
+    const connectionString = this.config.getOrThrow<string>('DATABASE_URL');
+    // Scope pg-boss to our own schema on the shared Postgres (from ?schema= in the
+    // URL) so its tables don't collide with other projects' pg-boss. Absent
+    // (local dev) → pg-boss default schema.
+    const schemaMatch = /[?&]schema=([^&]+)/.exec(connectionString);
     this.boss = new PgBoss({
-      connectionString: this.config.getOrThrow<string>('DATABASE_URL'),
+      connectionString,
       application_name: 'animehub-api',
+      ...(schemaMatch ? { schema: decodeURIComponent(schemaMatch[1]) } : {}),
     });
     this.boss.on('error', (error) => this.logger.error(error.message));
     await this.boss.start();
