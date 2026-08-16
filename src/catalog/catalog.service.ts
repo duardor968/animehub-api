@@ -22,9 +22,18 @@ export class CatalogService {
     const params = this.toParams(query);
     const key = this.snapshotKey(params);
     let snapshot = await this.loadSnapshot(key);
-    if (!snapshot) {
-      await this.refresh(key, params);
-      snapshot = await this.loadSnapshot(key);
+    // A zero-result page is a legitimate outcome for a filtered search, so we
+    // must NOT block on emptiness in general. But a snapshot that holds no items
+    // yet claims records exist is degenerate (a partial/failed refresh got
+    // cached); treat that like a cold cache and fetch synchronously.
+    if (!snapshot || this.isDegenerate(snapshot)) {
+      try {
+        await this.refresh(key, params);
+        snapshot = await this.loadSnapshot(key);
+      } catch {
+        // Source unavailable: keep whatever we already loaded rather than
+        // erroring; the guard below still handles a genuinely cold cache.
+      }
     } else if (snapshot.nextRefreshAt <= new Date()) {
       void this.refresh(key, params);
     }
@@ -66,6 +75,11 @@ export class CatalogService {
     if (active) return active;
     const promise = (async () => {
       const source = await this.source.getCatalog(params);
+      // A response that claims records but carries no rows is a partial/failed
+      // fetch; caching it would serve an empty grid under a non-zero count. Keep
+      // the previous snapshot (if any) and retry next cycle. A genuine 0-result
+      // search (totalRecords === 0) still caches normally below.
+      if (source.results.length === 0 && source.totalRecords > 0) return;
       await Promise.all([
         ...source.categories.map((category) =>
           this.prisma.category.upsert({
@@ -120,6 +134,15 @@ export class CatalogService {
     })().finally(() => this.refreshes.delete(key));
     this.refreshes.set(key, promise);
     return promise;
+  }
+
+  // A snapshot with no items but a positive record count can only come from a
+  // partial/failed refresh — page 1 of a non-empty result always has rows.
+  private isDegenerate(snapshot: {
+    items: unknown[];
+    totalRecords: number | null;
+  }) {
+    return snapshot.items.length === 0 && (snapshot.totalRecords ?? 0) > 0;
   }
 
   private loadSnapshot(key: string) {

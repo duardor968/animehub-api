@@ -25,7 +25,10 @@ export class HomeService {
   async getHome(): Promise<HomeResponseDto> {
     let snapshots = await this.loadSnapshots();
     const featured = snapshots.find((item) => item.kind === 'HOME_FEATURED');
-    if (!featured) {
+    // The home always has featured + recent content: an absent OR empty featured
+    // snapshot means we have nothing to show yet (cold cache, or a transient
+    // source response), so fetch synchronously instead of rendering an empty hero.
+    if (!featured || featured.items.length === 0) {
       await this.refresh();
       snapshots = await this.loadSnapshots();
     } else if (featured.nextRefreshAt <= new Date()) {
@@ -70,6 +73,10 @@ export class HomeService {
     if (this.refreshPromise) return this.refreshPromise;
     this.refreshPromise = (async () => {
       const home = await this.source.getHome();
+      // A source response with no featured anime is anomalous; don't overwrite
+      // the last good snapshots with it (that would serve an empty home). Keep
+      // what we have and retry on the next cycle.
+      if (home.featured.length === 0) return;
       const featured = await Promise.all(
         home.featured.map((anime) => this.projection.upsertAnime(anime)),
       );
