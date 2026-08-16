@@ -368,13 +368,21 @@ export class AnimeAv1Service {
     type: number,
     destination: z.infer<typeof animeSchema>,
   ): SourceRelation {
+    // AnimeAV1 relation type codes, taken from its own client bundle:
+    // 1 Precuela · 2 Secuela · 3 Ambientación alternativa · 4 Versión alternativa
+    // 5 Historia paralela · 6 Resumen · 7 Historia completa · 8 Historia principal
+    // 9 Spin-off. Our RelationKind enum is coarser, so several map to the nearest
+    // value (both alternatives → ALTERNATIVE; full/main story → MAIN_STORY;
+    // spin-off has no equivalent → OTHER).
     const kinds: Record<number, SourceRelation['kind']> = {
-      2: 'PREQUEL',
-      3: 'SEQUEL',
-      4: 'MAIN_STORY',
+      1: 'PREQUEL',
+      2: 'SEQUEL',
+      3: 'ALTERNATIVE',
+      4: 'ALTERNATIVE',
       5: 'SIDE_STORY',
-      7: 'SUMMARY',
-      8: 'ALTERNATIVE',
+      6: 'SUMMARY',
+      7: 'MAIN_STORY',
+      8: 'MAIN_STORY',
     };
     return {
       kind: kinds[type] ?? 'OTHER',

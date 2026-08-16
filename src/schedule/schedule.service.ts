@@ -63,11 +63,13 @@ export class ScheduleService {
         });
         entries.push({ animeId: anime.id, episodeId: episode.id });
       }
+      // The schedule is volatile (animeav1 is live), so keep the snapshot short:
+      // serve it for ~1 min, then revalidate in the background on the next hit.
       await this.projection.replaceSnapshot(
         'schedule:weekly',
         SnapshotKind.SCHEDULE,
         entries,
-        { ttlMinutes: 15 },
+        { ttlMinutes: 1 },
       );
     })().finally(() => {
       this.refreshPromise = undefined;

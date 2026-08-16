@@ -57,6 +57,14 @@ export class AnimeService {
         'Anime is no longer available at the source.',
       );
     }
+    // The source omits synopsis/category from relation references, so a related
+    // title only has them once it has been detailed on its own. Backfill any
+    // that haven't been — non-blocking and deduped — so every related card can
+    // consistently reveal its description on a later view.
+    for (const relation of anime.outgoingRelations) {
+      const target = relation.targetAnime;
+      if (target && !target.detailFetchedAt) void this.refresh(target.slug);
+    }
     return {
       data: serializeDetail(anime),
       meta: {

@@ -30,6 +30,12 @@ describe('download resolution policies', () => {
 
   it('applies age-based and negative-cache TTLs', () => {
     expect(linkTtlMinutes(null, true, now)).toBe(2);
+    // A recent episode with no mirrors yet is re-probed almost immediately so a
+    // just-published episode recovers as soon as the source populates its links.
+    expect(linkTtlMinutes(new Date(now - 60_000), true, now)).toBe(0.5);
+    expect(
+      linkTtlMinutes(new Date(now - 5 * 24 * 60 * 60_000), true, now),
+    ).toBe(2);
     expect(linkTtlMinutes(null, false, now)).toBe(15);
     expect(linkTtlMinutes(new Date(now - 24 * 60 * 60_000), false, now)).toBe(
       15,

@@ -22,7 +22,16 @@ export function linkTtlMinutes(
   empty: boolean,
   now = Date.now(),
 ) {
-  if (empty) return 2;
+  if (empty) {
+    // A just-published episode often has no mirrors for a few minutes while the
+    // source populates them. Caching that emptiness for long makes retries keep
+    // failing after the links appear, so recent episodes get a very short TTL
+    // (~30s) to re-probe quickly; older ones with no links stay cached longer.
+    const recent =
+      publishedAt !== null &&
+      now - publishedAt.getTime() <= 2 * 24 * 60 * 60_000;
+    return recent ? 0.5 : 2;
+  }
   if (!publishedAt) return 15;
   const age = now - publishedAt.getTime();
   if (age <= 2 * 24 * 60 * 60_000) return 15;
