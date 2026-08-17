@@ -1,4 +1,5 @@
 import {
+  isDegradedScrape,
   retainOmittedEntries,
   SCHEDULE_RETENTION_MS,
   type RetainableScheduleItem,
@@ -73,5 +74,35 @@ describe('schedule retention policy', () => {
     // stamped with the fetch time as its baseline last-seen.
     expect(retained.map((entry) => entry.animeId)).toEqual(['c']);
     expect(retained[0].label).toBe(prevFetchedAt.toISOString());
+  });
+});
+
+describe('degraded scrape guard', () => {
+  it('accepts a full-size scrape', () => {
+    expect(isDegradedScrape(77, 77)).toBe(false);
+  });
+
+  it('accepts a small, plausible day-to-day roster change', () => {
+    // ~96% of the healthy count — a couple of shows finishing/joining is normal.
+    expect(isDegradedScrape(74, 77)).toBe(false);
+  });
+
+  it('rejects a scrape materially smaller than the healthy snapshot', () => {
+    // ~78% < 85% — a partial/degraded source response that must not shrink the board.
+    expect(isDegradedScrape(60, 77)).toBe(true);
+  });
+
+  it('rejects an empty scrape when a healthy snapshot exists', () => {
+    expect(isDegradedScrape(0, 77)).toBe(true);
+  });
+
+  it('accepts anything on a cold cache (no healthy baseline to protect)', () => {
+    expect(isDegradedScrape(5, 0)).toBe(false);
+    expect(isDegradedScrape(0, 0)).toBe(false);
+  });
+
+  it('draws the line strictly below the ratio', () => {
+    expect(isDegradedScrape(85, 100, 0.85)).toBe(false);
+    expect(isDegradedScrape(84, 100, 0.85)).toBe(true);
   });
 });

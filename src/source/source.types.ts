@@ -79,7 +79,11 @@ export interface SourceCatalog {
 
 export interface SourceScheduleEntry {
   anime: SourceAnimeSummary;
-  episode: SourceEpisode;
+  // The source lists a show on the schedule with no latest episode when it has
+  // just been added or its episode row is transiently missing. We keep the show
+  // (so a blip never shrinks the board) and let the projection carry its last
+  // known episode instead of silently discarding the entry here.
+  episode: SourceEpisode | null;
 }
 
 export type SourceDownloadProvider =

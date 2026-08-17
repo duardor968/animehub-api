@@ -1,4 +1,8 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { SnapshotKind } from '../generated/prisma/enums';
 import { ScheduleResponseDto } from '../common/contracts';
 import { serializeAnime, serializeEpisode } from '../common/serializers';
@@ -17,6 +21,27 @@ import { AnimeAv1Service } from '../source/animeav1.service';
 // stops being seen and ages out naturally (handling broadcast pauses too, since
 // the source keeps listing paused shows).
 export const SCHEDULE_RETENTION_MS = 6 * 60 * 60_000;
+
+// A healthy /horario scrape returns the full roster (~77 shows) and changes by at
+// most a handful of entries a day. The source intermittently returns a valid but
+// *partial* payload (fewer shows, or shows with a null latest episode) to
+// datacenter IPs; replacing a healthy snapshot with that briefly blanks real
+// shows off the board — the exact partial state the official site never shows.
+// So a scrape that returns materially fewer shows than the last healthy snapshot
+// is treated as degraded and rejected, keeping the last complete board.
+export const SCHEDULE_MIN_HEALTHY_RATIO = 0.85;
+
+// Pure guard (unit-tested): should this scrape be rejected as degraded rather than
+// allowed to overwrite the current healthy snapshot? Only meaningful once we have a
+// healthy baseline to protect; a cold cache (healthyCount 0) accepts anything.
+export function isDegradedScrape(
+  sourceCount: number,
+  healthyCount: number,
+  ratio: number = SCHEDULE_MIN_HEALTHY_RATIO,
+): boolean {
+  if (healthyCount <= 0) return false;
+  return sourceCount < healthyCount * ratio;
+}
 
 export interface RetainableScheduleItem {
   animeId: string;
@@ -60,6 +85,7 @@ export function retainOmittedEntries(
 
 @Injectable()
 export class ScheduleService {
+  private readonly logger = new Logger(ScheduleService.name);
   private refreshPromise?: Promise<void>;
 
   constructor(
@@ -111,13 +137,37 @@ export class ScheduleService {
     };
   }
 
-  private async refresh() {
+  // Public so the background scheduler can drive it on a fixed cadence; the
+  // single-flight guard below dedupes overlapping calls (request-triggered
+  // revalidation and the cron never run the ingest twice at once).
+  async refresh() {
     if (this.refreshPromise) return this.refreshPromise;
     this.refreshPromise = (async () => {
       const source = await this.source.getSchedule();
-      // Never clobber the last good snapshot with an empty source response: a
-      // transient/partial fetch that returned nothing would poison the cache.
-      if (source.length === 0) return;
+      // Read the current snapshot up front: it is both the healthy baseline the
+      // degraded-scrape guard protects and the source of carried-over entries.
+      const previous = await this.load();
+      const healthyCount = previous?.items.length ?? 0;
+
+      // Never overwrite a healthy board with an empty or partial scrape. The
+      // source occasionally returns a valid-but-short payload; letting it through
+      // would blank real shows off the board (the partial state the official site
+      // never shows). Keep serving the last complete snapshot instead.
+      if (source.length === 0) {
+        if (healthyCount > 0) {
+          this.logger.warn(
+            'Empty schedule scrape; keeping last good snapshot.',
+          );
+        }
+        return;
+      }
+      if (isDegradedScrape(source.length, healthyCount)) {
+        this.logger.warn(
+          `Degraded schedule scrape (${source.length} < ${healthyCount} shows); keeping last good snapshot.`,
+        );
+        return;
+      }
+
       const now = new Date();
       const entries: Array<{
         animeId: string;
@@ -128,15 +178,15 @@ export class ScheduleService {
       for (const item of source) {
         const anime = await this.projection.upsertAnime(item.anime);
         // A schedule slot needs a real air timestamp. The source intermittently
-        // returns a freshly-aired episode with no createdAt yet (the server sees
-        // this far more than a browser does), and getSchedule drops any item
-        // without a publishedAt — so trusting the null would blank the show off
-        // the board and, worse, clobber its last good episode's timestamp. Use
-        // the episode when it carries a timestamp; otherwise fall back to this
-        // anime's most recent good episode so an airing show stays visible (one
-        // episode behind at worst) until the source populates the new one.
+        // lists a show with no latest episode, or a freshly-aired one with no
+        // createdAt yet (the server sees this far more than a browser does).
+        // Trusting the null would blank the show off the board and clobber its
+        // last good episode's timestamp — so use the episode only when it carries
+        // a timestamp, otherwise fall back to this anime's most recent good
+        // episode so an airing show stays visible (one episode behind at worst)
+        // until the source populates the new one.
         let episodeId: string;
-        if (item.episode.publishedAt) {
+        if (item.episode?.publishedAt) {
           const episode = await this.projection.upsertEpisode(
             anime.id,
             item.episode,
@@ -161,9 +211,9 @@ export class ScheduleService {
           label: now.toISOString(),
         });
       }
-      // Carry over still-airing shows the source transiently omitted this cycle
-      // (see SCHEDULE_RETENTION_MS) so none vanishes for a refresh cycle.
-      const previous = await this.load();
+      // Secondary smoother behind the degraded-scrape guard: carry over any
+      // still-airing show a healthy scrape transiently omitted this cycle (see
+      // SCHEDULE_RETENTION_MS) so none vanishes for a refresh cycle.
       if (previous) {
         entries.push(
           ...retainOmittedEntries(
@@ -180,7 +230,8 @@ export class ScheduleService {
       }
       // The board changes ~once a day and its live bits are derived client-side,
       // so a short TTL only multiplied our exposure to the source's transient
-      // states without improving freshness. Revalidate every 15 min instead.
+      // states without improving freshness. Revalidate every 15 min instead;
+      // the background scheduler keeps it fresher than that in practice.
       await this.projection.replaceSnapshot(
         'schedule:weekly',
         SnapshotKind.SCHEDULE,

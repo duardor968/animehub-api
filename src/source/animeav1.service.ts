@@ -203,20 +203,20 @@ export class AnimeAv1Service {
 
   async getSchedule(): Promise<SourceScheduleEntry[]> {
     const data = scheduleSchema.parse(await this.fetchRoute('/horario'));
-    return data.media.flatMap((anime) =>
-      anime.latestEpisode
-        ? [
-            {
-              anime: this.normalizeAnime(anime),
-              episode: this.normalizeEpisode(
-                anime.latestEpisode,
-                anime.slug,
-                String(anime.id),
-              ),
-            },
-          ]
-        : [],
-    );
+    // Return the full roster the source listed — including shows whose latest
+    // episode is momentarily absent (episode: null) — so the count reflects the
+    // real roster size for the projection's degraded-scrape guard, and no show is
+    // dropped here on a transient blip.
+    return data.media.map((anime) => ({
+      anime: this.normalizeAnime(anime),
+      episode: anime.latestEpisode
+        ? this.normalizeEpisode(
+            anime.latestEpisode,
+            anime.slug,
+            String(anime.id),
+          )
+        : null,
+    }));
   }
 
   async getEpisodeDownloads(
