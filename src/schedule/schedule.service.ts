@@ -6,15 +6,61 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProjectionService } from '../projection/projection.service';
 import { AnimeAv1Service } from '../source/animeav1.service';
 
+// A still-airing series must never disappear from the board because the source
+// momentarily omitted it — e.g. the Monday-morning rollover, when last week's
+// "latest episode" briefly drops out before this week's is published, and
+// getSchedule() silently discards entries with no latest episode. We carry such a
+// show forward until the source has stopped listing it for at least this long.
+// Each snapshot item's `label` stores the last time we actually saw the show from
+// the source, so the window is wall-clock and independent of refresh cadence: a
+// transient blip lasts seconds/minutes, never 6h, while a genuinely departed show
+// stops being seen and ages out naturally (handling broadcast pauses too, since
+// the source keeps listing paused shows).
+export const SCHEDULE_RETENTION_MS = 6 * 60 * 60_000;
+
+export interface RetainableScheduleItem {
+  animeId: string;
+  episodeId: string | null;
+  label: string | null;
+}
+
+// Pure policy (unit-tested): given the anime ids the source returned this cycle,
+// the previous snapshot's items and the current time, decide which
+// previously-known shows to carry over so a transient omission never drops a
+// still-airing series. A total-count guard cannot catch this (one day collapsing
+// barely moves the total); tracking per-show presence over time does.
+export function retainOmittedEntries(
+  seenAnimeIds: Set<string>,
+  previousItems: RetainableScheduleItem[],
+  previousFetchedAt: Date,
+  now: Date,
+  retentionMs: number = SCHEDULE_RETENTION_MS,
+): Array<{ animeId: string; episodeId?: string; label: string }> {
+  const retained: Array<{
+    animeId: string;
+    episodeId?: string;
+    label: string;
+  }> = [];
+  for (const item of previousItems) {
+    if (seenAnimeIds.has(item.animeId)) continue;
+    const parsed = item.label ? new Date(item.label) : null;
+    const lastSeen =
+      parsed && !Number.isNaN(parsed.getTime()) ? parsed : previousFetchedAt;
+    if (now.getTime() - lastSeen.getTime() >= retentionMs) continue;
+    retained.push({
+      animeId: item.animeId,
+      episodeId: item.episodeId ?? undefined,
+      // Preserve the original last-seen stamp so the retention clock keeps
+      // counting from when the source actually last listed the show.
+      label: lastSeen.toISOString(),
+    });
+  }
+  return retained;
+}
+
 @Injectable()
 export class ScheduleService {
   private refreshPromise?: Promise<void>;
-
-  // How long a stale snapshot may still be served instantly while it
-  // revalidates in the background. Past this the data is too old to trust for a
-  // live schedule (nobody has visited in a while, so it can predate the source's
-  // latest state), so we block and refresh to render correctly on the first hit.
-  private static readonly MAX_SERVE_STALE_MS = 10 * 60_000;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -25,30 +71,22 @@ export class ScheduleService {
   async getSchedule(): Promise<ScheduleResponseDto> {
     let snapshot = await this.load();
     const now = new Date();
-    // Block-and-fetch synchronously when either we have nothing usable — an
-    // absent OR zero-item snapshot (a cold cache or a transient/partial source
-    // response); the weekly schedule is never legitimately empty — or the
-    // snapshot is stale beyond the grace window, i.e. so old (nobody visited in a
-    // while) that it can predate the source's current state and show an
-    // outdated/empty day. Within the grace window a stale snapshot is still
-    // served instantly and revalidated in the background.
-    const empty = !snapshot || snapshot.items.length === 0;
-    const staleBeyondGrace =
-      !!snapshot &&
-      snapshot.nextRefreshAt <= now &&
-      now.getTime() - snapshot.fetchedAt.getTime() >
-        ScheduleService.MAX_SERVE_STALE_MS;
-    if (empty || staleBeyondGrace) {
+    // Block synchronously only when there is nothing usable to show: an absent or
+    // empty snapshot (cold cache, or a transient/partial source response). The
+    // weekly schedule is never legitimately empty. Otherwise serve instantly and
+    // revalidate in the background — the board is near-static and its fast-moving
+    // bits (aired status, episode number) are derived client-side, so a slightly
+    // stale snapshot still renders correctly. Because the page is force-dynamic /
+    // no-store, the background refresh's result surfaces on the very next request.
+    if (!snapshot || snapshot.items.length === 0) {
       try {
         await this.refresh();
         snapshot = await this.load();
       } catch {
-        // Source unavailable: fall through and serve whatever we already loaded
-        // (the last good snapshot). Blocking must never turn a usable-but-stale
-        // schedule into an error page; the guard below handles the truly-empty
-        // case where there is genuinely nothing to show.
+        // Source unavailable: fall through and let the guard below surface the
+        // empty case rather than turning a usable snapshot into an error page.
       }
-    } else if (snapshot && snapshot.nextRefreshAt <= now) {
+    } else if (snapshot.nextRefreshAt <= now) {
       void this.refresh();
     }
     if (!snapshot || snapshot.items.length === 0)
@@ -78,10 +116,15 @@ export class ScheduleService {
     this.refreshPromise = (async () => {
       const source = await this.source.getSchedule();
       // Never clobber the last good snapshot with an empty source response: a
-      // transient/partial fetch that returned nothing would otherwise poison the
-      // cache and be served as an empty schedule. Keep what we have and retry.
+      // transient/partial fetch that returned nothing would poison the cache.
       if (source.length === 0) return;
-      const entries = [];
+      const now = new Date();
+      const entries: Array<{
+        animeId: string;
+        episodeId?: string;
+        label: string;
+      }> = [];
+      const seen = new Set<string>();
       for (const item of source) {
         const anime = await this.projection.upsertAnime(item.anime);
         const episode = await this.projection.upsertEpisode(
@@ -92,15 +135,38 @@ export class ScheduleService {
           where: { id: anime.id },
           data: { latestEpisodePublishedAt: item.episode.publishedAt },
         });
-        entries.push({ animeId: anime.id, episodeId: episode.id });
+        seen.add(anime.id);
+        entries.push({
+          animeId: anime.id,
+          episodeId: episode.id,
+          label: now.toISOString(),
+        });
       }
-      // The schedule is volatile (animeav1 is live), so keep the snapshot short:
-      // serve it for ~1 min, then revalidate in the background on the next hit.
+      // Carry over still-airing shows the source transiently omitted this cycle
+      // (see SCHEDULE_RETENTION_MS) so none vanishes for a refresh cycle.
+      const previous = await this.load();
+      if (previous) {
+        entries.push(
+          ...retainOmittedEntries(
+            seen,
+            previous.items.map((item) => ({
+              animeId: item.animeId,
+              episodeId: item.episodeId,
+              label: item.label,
+            })),
+            previous.fetchedAt,
+            now,
+          ),
+        );
+      }
+      // The board changes ~once a day and its live bits are derived client-side,
+      // so a short TTL only multiplied our exposure to the source's transient
+      // states without improving freshness. Revalidate every 15 min instead.
       await this.projection.replaceSnapshot(
         'schedule:weekly',
         SnapshotKind.SCHEDULE,
         entries,
-        { ttlMinutes: 1 },
+        { ttlMinutes: 15 },
       );
     })().finally(() => {
       this.refreshPromise = undefined;
