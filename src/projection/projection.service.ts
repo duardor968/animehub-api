@@ -173,7 +173,13 @@ export class ProjectionService {
         title: source.title,
         imageUrl: source.imageUrl,
         sourcePath: source.sourcePath,
-        publishedAt: source.publishedAt,
+        // Never overwrite a known publish time with null. The source's home/detail
+        // endpoints intermittently return a freshly-aired episode with no createdAt
+        // yet (the server sees this far more than a browser does); writing that null
+        // here would blank the episode's timestamp and drop today's shows off the
+        // schedule (which needs publishedAt to place a slot). A publish time only
+        // ever goes null -> value, never back, so keeping the existing value is safe.
+        publishedAt: source.publishedAt ?? undefined,
         lastSeenAt: new Date(),
       },
       create: {
