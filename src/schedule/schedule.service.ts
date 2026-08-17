@@ -127,18 +127,37 @@ export class ScheduleService {
       const seen = new Set<string>();
       for (const item of source) {
         const anime = await this.projection.upsertAnime(item.anime);
-        const episode = await this.projection.upsertEpisode(
-          anime.id,
-          item.episode,
-        );
-        await this.prisma.anime.update({
-          where: { id: anime.id },
-          data: { latestEpisodePublishedAt: item.episode.publishedAt },
-        });
+        // A schedule slot needs a real air timestamp. The source intermittently
+        // returns a freshly-aired episode with no createdAt yet (the server sees
+        // this far more than a browser does), and getSchedule drops any item
+        // without a publishedAt — so trusting the null would blank the show off
+        // the board and, worse, clobber its last good episode's timestamp. Use
+        // the episode when it carries a timestamp; otherwise fall back to this
+        // anime's most recent good episode so an airing show stays visible (one
+        // episode behind at worst) until the source populates the new one.
+        let episodeId: string;
+        if (item.episode.publishedAt) {
+          const episode = await this.projection.upsertEpisode(
+            anime.id,
+            item.episode,
+          );
+          await this.prisma.anime.update({
+            where: { id: anime.id },
+            data: { latestEpisodePublishedAt: item.episode.publishedAt },
+          });
+          episodeId = episode.id;
+        } else {
+          const lastGood = await this.prisma.episode.findFirst({
+            where: { animeId: anime.id, publishedAt: { not: null } },
+            orderBy: { publishedAt: 'desc' },
+          });
+          if (!lastGood) continue;
+          episodeId = lastGood.id;
+        }
         seen.add(anime.id);
         entries.push({
           animeId: anime.id,
-          episodeId: episode.id,
+          episodeId,
           label: now.toISOString(),
         });
       }
