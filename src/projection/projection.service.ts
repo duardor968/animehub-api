@@ -203,32 +203,47 @@ export class ProjectionService {
       episodeId?: string;
       label?: string;
     }>,
-    options: { ttlMinutes: number; totalPages?: number; totalRecords?: number },
+    options: {
+      ttlMinutes: number;
+      totalPages?: number;
+      totalRecords?: number;
+      minYear?: number;
+      maxYear?: number;
+      fetchedAt?: Date;
+    },
   ) {
-    const now = new Date();
-    const snapshot = await this.prisma.snapshot.upsert({
-      where: { key },
-      update: {
-        kind,
-        fetchedAt: now,
-        nextRefreshAt: new Date(now.getTime() + options.ttlMinutes * 60_000),
-        totalPages: options.totalPages,
-        totalRecords: options.totalRecords,
-      },
-      create: {
-        key,
-        kind,
-        fetchedAt: now,
-        nextRefreshAt: new Date(now.getTime() + options.ttlMinutes * 60_000),
-        totalPages: options.totalPages,
-        totalRecords: options.totalRecords,
-      },
-    });
-    await this.prisma.$transaction([
-      this.prisma.snapshotItem.deleteMany({
+    // Callers replacing a logical group of snapshots can provide one timestamp
+    // for the whole batch. For each snapshot, metadata and contents move as one
+    // atomic unit: readers can observe either the previous complete version or
+    // the new complete version, never new freshness metadata with old/empty rows.
+    const now = options.fetchedAt ?? new Date();
+    return this.prisma.$transaction(async (transaction) => {
+      const snapshot = await transaction.snapshot.upsert({
+        where: { key },
+        update: {
+          kind,
+          fetchedAt: now,
+          nextRefreshAt: new Date(now.getTime() + options.ttlMinutes * 60_000),
+          totalPages: options.totalPages,
+          totalRecords: options.totalRecords,
+          minYear: options.minYear,
+          maxYear: options.maxYear,
+        },
+        create: {
+          key,
+          kind,
+          fetchedAt: now,
+          nextRefreshAt: new Date(now.getTime() + options.ttlMinutes * 60_000),
+          totalPages: options.totalPages,
+          totalRecords: options.totalRecords,
+          minYear: options.minYear,
+          maxYear: options.maxYear,
+        },
+      });
+      await transaction.snapshotItem.deleteMany({
         where: { snapshotId: snapshot.id },
-      }),
-      this.prisma.snapshotItem.createMany({
+      });
+      await transaction.snapshotItem.createMany({
         data: entries.map((entry, position) => ({
           snapshotId: snapshot.id,
           animeId: entry.animeId,
@@ -236,9 +251,9 @@ export class ProjectionService {
           label: entry.label,
           position,
         })),
-      }),
-    ]);
-    return snapshot;
+      });
+      return snapshot;
+    });
   }
 
   async markNotFound(slug: string) {

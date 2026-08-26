@@ -4,6 +4,7 @@ import { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
+import { NoStoreInterceptor } from './common/no-store.interceptor';
 import { ProblemDetailsFilter } from './common/problem-details.filter';
 
 export async function configureApp(app: NestFastifyApplication) {
@@ -24,6 +25,10 @@ export async function configureApp(app: NestFastifyApplication) {
     }),
   );
   app.useGlobalFilters(new ProblemDetailsFilter());
+  // Dynamic projections and capability-protected download jobs must never be
+  // retained by a browser, reverse proxy or shared cache. Freshness is governed
+  // exclusively by the API's durable snapshots.
+  app.useGlobalInterceptors(new NoStoreInterceptor());
   await app.register(helmet as never, {
     contentSecurityPolicy: false,
     crossOriginResourcePolicy: { policy: 'same-site' },

@@ -113,7 +113,7 @@ export class ScheduleService {
         // empty case rather than turning a usable snapshot into an error page.
       }
     } else if (snapshot.nextRefreshAt <= now) {
-      void this.refresh();
+      this.refreshInBackground();
     }
     if (!snapshot || snapshot.items.length === 0)
       throw new ServiceUnavailableException('Schedule is unavailable.');
@@ -256,6 +256,16 @@ export class ScheduleService {
           },
         },
       },
+    });
+  }
+
+  private refreshInBackground() {
+    void this.refresh().catch((error) => {
+      this.logger.warn(
+        `Request-triggered schedule refresh failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     });
   }
 }

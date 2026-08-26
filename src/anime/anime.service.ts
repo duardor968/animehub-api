@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -21,8 +22,11 @@ const detailInclude = {
   },
 };
 
+export const ANIME_REQUEST_REFRESH_TIMEOUT_MS = 10_000;
+
 @Injectable()
 export class AnimeService {
+  private readonly logger = new Logger(AnimeService.name);
   private readonly refreshes = new Map<string, Promise<void>>();
 
   constructor(
@@ -43,13 +47,13 @@ export class AnimeService {
         include: detailInclude,
       });
     } else if (!anime.detailFetchedAt) {
-      await this.refresh(slug);
+      await this.waitForRefresh(this.refresh(slug), slug);
       anime = await this.prisma.anime.findUnique({
         where: { slug },
         include: detailInclude,
       });
     } else if (anime.nextRefreshAt <= new Date()) {
-      void this.refresh(slug);
+      this.refreshInBackground(slug, 'expired detail');
     }
     if (!anime) throw new NotFoundException('Anime not found.');
     if (anime.availability === 'UNAVAILABLE') {
@@ -63,7 +67,9 @@ export class AnimeService {
     // consistently reveal its description on a later view.
     for (const relation of anime.outgoingRelations) {
       const target = relation.targetAnime;
-      if (target && !target.detailFetchedAt) void this.refresh(target.slug);
+      if (target && !target.detailFetchedAt) {
+        this.refreshInBackground(target.slug, 'related detail backfill');
+      }
     }
     return {
       data: serializeDetail(anime),
@@ -79,10 +85,35 @@ export class AnimeService {
     slug: string,
     page: number,
   ): Promise<EpisodePageResponseDto> {
-    await this.getAnime(slug);
-    const anime = await this.prisma.anime.findUniqueOrThrow({
-      where: { slug },
-    });
+    let anime = await this.prisma.anime.findUnique({ where: { slug } });
+    if (!anime) {
+      await this.refresh(slug);
+      anime = await this.prisma.anime.findUnique({ where: { slug } });
+    } else if (!anime.detailFetchedAt) {
+      await this.waitForRefresh(this.refresh(slug), slug);
+      anime = await this.prisma.anime.findUnique({ where: { slug } });
+    }
+    if (!anime) throw new NotFoundException('Anime not found.');
+    if (anime.availability === 'UNAVAILABLE') {
+      throw new NotFoundException(
+        'Anime is no longer available at the source.',
+      );
+    }
+    // Episode availability is the fast-moving part of an airing title. getAnime
+    // normally revalidates stale details in the background, but querying the
+    // episode table before that refresh completes recreates the same "first
+    // visitor sees the old episode list" bug as Home. Await the existing
+    // single-flight refresh for airing series, with a bounded last-good fallback.
+    const now = new Date();
+    const premiereIsDue =
+      anime.status === 'UPCOMING' &&
+      anime.nextEpisodeAt !== null &&
+      anime.nextEpisodeAt <= now;
+    const canStillGainEpisodes = anime.status !== 'FINISHED';
+    if (canStillGainEpisodes && (anime.nextRefreshAt <= now || premiereIsDue)) {
+      await this.waitForRefresh(this.refresh(slug), slug);
+      anime = await this.prisma.anime.findUniqueOrThrow({ where: { slug } });
+    }
     const perPage = 50;
     const [episodes, totalRecords] = await Promise.all([
       this.prisma.episode.findMany({
@@ -131,9 +162,51 @@ export class AnimeService {
             'AnimeAV1 is temporarily unavailable.',
           );
         }
+        // A cached record is the fallback, not evidence that the refresh
+        // succeeded. Propagate so the request-side bounded wait or background
+        // catch can log the source failure before serving that cached record.
+        throw error;
       }
     })().finally(() => this.refreshes.delete(slug));
     this.refreshes.set(slug, promise);
     return promise;
+  }
+
+  private refreshInBackground(slug: string, operation: string) {
+    void this.refresh(slug).catch((error) => {
+      this.logger.warn(
+        `${operation} refresh failed for ${slug}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    });
+  }
+
+  private async waitForRefresh(promise: Promise<void>, slug: string) {
+    let timer: NodeJS.Timeout | undefined;
+    const outcome = await Promise.race([
+      promise.then(
+        () => ({ kind: 'completed' as const }),
+        (error: unknown) => ({ kind: 'failed' as const, error }),
+      ),
+      new Promise<{ kind: 'timed-out' }>((resolve) => {
+        timer = setTimeout(
+          () => resolve({ kind: 'timed-out' }),
+          ANIME_REQUEST_REFRESH_TIMEOUT_MS,
+        );
+        timer.unref?.();
+      }),
+    ]);
+    if (timer) clearTimeout(timer);
+    if (outcome.kind === 'completed') return;
+    this.logger.warn(
+      outcome.kind === 'timed-out'
+        ? `Episode refresh timed out for ${slug}; serving cached episodes.`
+        : `Episode refresh failed for ${slug}; serving cached episodes: ${
+            outcome.error instanceof Error
+              ? outcome.error.message
+              : String(outcome.error)
+          }`,
+    );
   }
 }
