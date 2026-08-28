@@ -1,5 +1,8 @@
 import { Transform } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -8,6 +11,20 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+
+export const catalogOrderValues = [
+  'score',
+  'popular',
+  'title',
+  'latest_added',
+  'latest_released',
+] as const;
+
+export const catalogStatusValues = [
+  'emision',
+  'finalizado',
+  'proximamente',
+] as const;
 
 const toStringArray = ({ value }: { value: unknown }): string[] | undefined => {
   if (value === undefined) return undefined;
@@ -29,7 +46,7 @@ export class CatalogQueryDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(40)
+  @IsIn(catalogOrderValues)
   order?: string;
 
   @IsOptional()
@@ -39,17 +56,23 @@ export class CatalogQueryDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(30)
+  @IsIn(catalogStatusValues)
   status?: string;
 
   @IsOptional()
   @Transform(toStringArray)
+  @ArrayMaxSize(20)
+  @ArrayUnique()
   @IsString({ each: true })
+  @MaxLength(80, { each: true })
   genre?: string[];
 
   @IsOptional()
   @Transform(toStringArray)
+  @ArrayMaxSize(20)
+  @ArrayUnique()
   @IsString({ each: true })
+  @MaxLength(80, { each: true })
   category?: string[];
 
   @IsOptional()

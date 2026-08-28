@@ -19,6 +19,7 @@ import {
   DownloadJobReceiptResponseDto,
   DownloadJobResponseDto,
 } from './download.dto';
+import { ApiProblemResponses } from '../common/openapi-problem-responses';
 import { DownloadJobsService } from './download-jobs.service';
 
 @ApiTags('download jobs')
@@ -30,17 +31,19 @@ export class DownloadJobsController {
   @RouteConfig({ rateLimit: { max: 5, timeWindow: '1 minute' } })
   @ApiOperation({ summary: 'Crea un trabajo durable para una serie o rango' })
   @ApiOkResponse({ type: DownloadJobReceiptResponseDto })
+  @ApiProblemResponses(400, 404, 429, 500, 503)
   create(@Param('slug') slug: string, @Body() body: CreateDownloadJobDto) {
     return this.jobs.create(slug, body);
   }
 
   @Get('download-jobs/:id')
   @RouteConfig({ rateLimit: { max: 120, timeWindow: '1 minute' } })
-  @ApiBearerAuth()
+  @ApiBearerAuth('jobCapability')
   @ApiOperation({
     summary: 'Consulta progreso y resultados mediante capacidad',
   })
   @ApiOkResponse({ type: DownloadJobResponseDto })
+  @ApiProblemResponses(401, 429, 500)
   get(
     @Param('id') id: string,
     @Headers('authorization') authorization?: string,
@@ -50,9 +53,10 @@ export class DownloadJobsController {
 
   @Post('download-jobs/:id/retry')
   @RouteConfig({ rateLimit: { max: 10, timeWindow: '1 minute' } })
-  @ApiBearerAuth()
+  @ApiBearerAuth('jobCapability')
   @ApiOperation({ summary: 'Reintenta únicamente episodios fallidos' })
   @ApiOkResponse({ type: DownloadJobResponseDto })
+  @ApiProblemResponses(400, 401, 429, 500)
   retry(
     @Param('id') id: string,
     @Headers('authorization') authorization?: string,
@@ -62,9 +66,10 @@ export class DownloadJobsController {
 
   @Post('download-jobs/:id/cancel')
   @RouteConfig({ rateLimit: { max: 20, timeWindow: '1 minute' } })
-  @ApiBearerAuth()
+  @ApiBearerAuth('jobCapability')
   @ApiOperation({ summary: 'Cancela los ítems pendientes del trabajo' })
   @ApiOkResponse({ type: DownloadJobResponseDto })
+  @ApiProblemResponses(401, 429, 500)
   cancel(
     @Param('id') id: string,
     @Headers('authorization') authorization?: string,

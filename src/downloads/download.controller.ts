@@ -5,6 +5,7 @@ import {
   ResolveDownloadsDto,
   ResolveDownloadsResponseDto,
 } from './download.dto';
+import { ApiProblemResponses } from '../common/openapi-problem-responses';
 import { DownloadResolverService } from './download-resolver.service';
 
 @ApiTags('downloads')
@@ -16,6 +17,7 @@ export class DownloadController {
   @RouteConfig({ rateLimit: { max: 20, timeWindow: '1 minute' } })
   @ApiOperation({ summary: 'Resuelve hasta cincuenta episodios por operación' })
   @ApiOkResponse({ type: ResolveDownloadsResponseDto })
+  @ApiProblemResponses(400, 404, 429, 500, 503)
   resolve(@Param('slug') slug: string, @Body() body: ResolveDownloadsDto) {
     return this.resolver.resolve(slug, body);
   }

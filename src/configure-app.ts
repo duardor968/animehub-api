@@ -54,7 +54,18 @@ export function createOpenApiDocument(
       'Contrato público REST compartido por AnimeHub Web y Desktop.',
     )
     .setVersion('1.0.0')
-    .addBearerAuth()
+    .addServer('https://animehub-api.duardo.dev', 'Producción')
+    .addServer('http://localhost:8000', 'Desarrollo local')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'opaque capability',
+        description:
+          'Capacidad opaca y temporal devuelta al crear un trabajo de descarga; no es un JWT.',
+      },
+      'jobCapability',
+    )
     .build();
   return SwaggerModule.createDocument(app, openApiConfig);
 }
