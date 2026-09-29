@@ -203,10 +203,7 @@ export class AnimeAv1Service {
 
   async getSchedule(): Promise<SourceScheduleEntry[]> {
     const data = scheduleSchema.parse(await this.fetchRoute('/horario'));
-    // Return the full roster the source listed — including shows whose latest
-    // episode is momentarily absent (episode: null) — so the count reflects the
-    // real roster size for the projection's degraded-scrape guard, and no show is
-    // dropped here on a transient blip.
+    // Keep entries without an episode; the projection can use a known timestamp.
     return data.media.map((anime) => ({
       anime: this.normalizeAnime(anime),
       episode: anime.latestEpisode

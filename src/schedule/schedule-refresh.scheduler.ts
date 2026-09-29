@@ -25,15 +25,10 @@ export class ScheduleRefreshScheduler implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     // Gated by the same flag as the download worker so CI and job-less
-    // deployments don't run background work. refresh() is single-flight and
-    // rejects degraded scrapes, so a slow/partial source never corrupts the
-    // served snapshot; here we just drive it on a fixed cadence.
+    // deployments don't run background work. refresh() is single-flight;
+    // here we drive it independently of visitor traffic.
     if (this.config.get<string>('JOBS_ENABLED', 'true') === 'false') return;
-    // Warm the snapshot immediately on boot: after a restart the stored snapshot
-    // can be stale (e.g. a day-old board), and serve-stale-while-revalidate would
-    // show that to the first visitor until a request or the interval's first tick
-    // (a full period away) refreshed it. Fire-and-forget — the server still starts
-    // without waiting for the scrape.
+    // Warm on boot so the first visitor usually needs no synchronous refresh.
     this.runRefresh();
     this.timer = setInterval(
       () => this.runRefresh(),

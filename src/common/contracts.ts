@@ -142,6 +142,10 @@ export class ScheduleEntryDto {
   @ApiProperty({ type: AnimeSummaryDto }) anime!: AnimeSummaryDto;
   @ApiProperty({ type: EpisodeDto }) latestEpisode!: EpisodeDto;
   @ApiProperty() basisPublishedAt!: string;
+  @ApiProperty({
+    description: 'The published episode completes a finished series.',
+  })
+  isFinalEpisode!: boolean;
 }
 
 export class ScheduleResponseDto {
