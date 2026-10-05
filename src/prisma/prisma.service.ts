@@ -3,23 +3,31 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';
 
+// Home uses a separate, small pool with strict read/job deadlines. Other API
+// workflows keep their existing pool and are not delayed by home refreshes.
+export function createPrismaAdapter(
+  config: ConfigService,
+  options: {
+    max?: number;
+    connectionTimeoutMillis?: number;
+    query_timeout?: number;
+    statement_timeout?: number;
+    idleTimeoutMillis?: number;
+  } = {},
+) {
+  const connectionString = config.getOrThrow<string>('DATABASE_URL');
+  const schemaMatch = /[?&]schema=([^&]+)/.exec(connectionString);
+  const schema = schemaMatch ? decodeURIComponent(schemaMatch[1]) : undefined;
+  return new PrismaPg(
+    { connectionString, ...options },
+    schema ? { schema } : undefined,
+  );
+}
+
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleDestroy {
   constructor(config: ConfigService) {
-    const connectionString = config.getOrThrow<string>('DATABASE_URL');
-    // The `pg` driver ignores Prisma's `?schema=` param, so the adapter must be
-    // told the schema explicitly for its generated queries. Otherwise runtime
-    // queries hit `public` while `prisma migrate deploy` (which does honor
-    // `?schema=`) creates the tables in the target schema — every query would
-    // 500. Absent (local dev) → undefined → the default `public` schema.
-    const schemaMatch = /[?&]schema=([^&]+)/.exec(connectionString);
-    const schema = schemaMatch ? decodeURIComponent(schemaMatch[1]) : undefined;
-    const adapter = new PrismaPg(
-      { connectionString },
-      schema ? { schema } : undefined,
-    );
-
-    super({ adapter });
+    super({ adapter: createPrismaAdapter(config) });
   }
 
   async onModuleDestroy() {

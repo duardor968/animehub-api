@@ -107,3 +107,101 @@ describe('AnimeAv1Service', () => {
     ]);
   });
 });
+
+describe('AnimeAv1Service bounded home source', () => {
+  const service = new AnimeAv1Service(
+    new ConfigService({ ANIMEAV1_BASE_URL: 'https://source.test' }),
+  );
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it('retains independently valid sections when another section is malformed', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue(
+      routeResponse({
+        featured: 'broken upstream payload',
+        latestEpisodes: [
+          { id: 10, number: 1, media: { id: 1, slug: 'one', title: 'One' } },
+        ],
+        latestMedia: [{ id: 2, slug: 'two', title: 'Two' }],
+      }),
+    );
+    const home = await service.getHome();
+    expect(home.featured).toEqual([]);
+    expect(home.recentEpisodes).toHaveLength(1);
+    expect(home.recentAnime).toHaveLength(1);
+  });
+
+  it('rejects duplicated entries in one section without blanking valid sections', async () => {
+    const anime = { id: 1, slug: 'one', title: 'One' };
+    vi.spyOn(global, 'fetch').mockResolvedValue(
+      routeResponse({
+        featured: [anime, anime],
+        latestEpisodes: [],
+        latestMedia: [anime],
+      }),
+    );
+    const home = await service.getHome();
+    expect(home.featured).toEqual([]);
+    expect(home.recentAnime).toHaveLength(1);
+  });
+
+  it('does not issue a fetch for an already aborted refresh', async () => {
+    const fetchMock = vi.spyOn(global, 'fetch');
+    const controller = new AbortController();
+    controller.abort();
+    await expect(service.getHome(controller.signal)).rejects.toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('uses only two attempts and cancels non-success response bodies', async () => {
+    vi.useFakeTimers();
+    const cancel = vi.fn(() => Promise.resolve());
+    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue({
+      status: 503,
+      ok: false,
+      body: { cancel },
+    } as unknown as Response);
+    const result = service.getHome().catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(await result).toBeInstanceOf(Error);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(cancel).toHaveBeenCalledTimes(2);
+  });
+
+  it('aborts a stalled JSON body, without retrying after cancellation', async () => {
+    const controller = new AbortController();
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockImplementation((_url, init) => {
+        const signal = init!.signal!;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () =>
+            new Promise((_resolve, reject) => {
+              signal.addEventListener(
+                'abort',
+                () =>
+                  reject(
+                    signal.reason instanceof Error
+                      ? signal.reason
+                      : new Error('Aborted'),
+                  ),
+                {
+                  once: true,
+                },
+              );
+            }),
+        } as unknown as Response);
+      });
+    const result = service
+      .getHome(controller.signal)
+      .catch((error: unknown) => error);
+    await new Promise<void>((done) => setImmediate(done));
+    controller.abort();
+    expect(await result).toBeInstanceOf(Error);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

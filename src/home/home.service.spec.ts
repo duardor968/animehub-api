@@ -1,15 +1,14 @@
 import { vi } from 'vitest';
 import { SnapshotKind } from '../generated/prisma/enums';
-import { AnimeService } from '../anime/anime.service';
-import { PrismaService } from '../prisma/prisma.service';
-import { ProjectionService } from '../projection/projection.service';
 import { AnimeAv1Service } from '../source/animeav1.service';
 import type {
   SourceAnimeSummary,
   SourceEpisode,
   SourceHome,
 } from '../source/source.types';
-import { HOME_REQUEST_REFRESH_TIMEOUT_MS, HomeService } from './home.service';
+import { HomeService } from './home.service';
+import { HomeStore, type HomeSnapshots } from './home-store';
+import { HOME_REFRESH_TIMEOUT_MS, homeBackoffMs } from './home-policy';
 
 const sourceAnime: SourceAnimeSummary = {
   id: 'source-anime',
@@ -114,110 +113,267 @@ function staleSnapshots() {
 
 function createHarness() {
   const snapshots = staleSnapshots();
-  let projectedEpisode = staleEpisode;
-  const prisma = {
-    snapshot: { findMany: vi.fn(() => Promise.resolve(snapshots)) },
-    anime: {
-      update: vi.fn(() => Promise.resolve({ id: 'db-anime' })),
-    },
+  const store = {
+    read: vi.fn(() => Promise.resolve(snapshots as unknown as HomeSnapshots)),
+    acquire: vi.fn(() => Promise.resolve({ token: 'owner', failures: 0 })),
+    release: vi.fn(() => Promise.resolve()),
+    publish: vi.fn(() => Promise.resolve({ published: 3, partial: false })),
+    enrichDetail: vi.fn(() => Promise.resolve()),
   };
-  const projection = {
-    upsertAnime: vi.fn(() => Promise.resolve({ id: 'db-anime' })),
-    upsertEpisode: vi.fn((_animeId: string, episode: SourceEpisode) => {
-      projectedEpisode = episode;
-      return Promise.resolve({ id: `db-${episode.id}` });
-    }),
-    replaceSnapshot: vi.fn(
-      (
-        _key: string,
-        kind: SnapshotKind,
-        _entries: unknown[],
-        options: { ttlMinutes: number; fetchedAt?: Date },
-      ) => {
-        const snapshot = snapshots.find((entry) => entry.kind === kind);
-        const fetchedAt = options.fetchedAt ?? new Date();
-        if (snapshot) {
-          snapshot.fetchedAt = fetchedAt;
-          snapshot.nextRefreshAt = new Date(
-            fetchedAt.getTime() + options.ttlMinutes * 60_000,
-          );
-          if (kind === SnapshotKind.HOME_RECENT_EPISODES) {
-            snapshot.items = [
-              {
-                anime: animeRecord(),
-                episode: episodeRecord(projectedEpisode),
-              },
-            ];
-          }
-        }
-        return Promise.resolve({ id: snapshot?.id ?? 'snapshot' });
-      },
-    ),
+  const source = {
+    getHome: vi.fn<() => Promise<SourceHome>>().mockResolvedValue(sourceHome),
   };
-  const source = { getHome: vi.fn<() => Promise<SourceHome>>() };
-  const anime = {
-    getAnime: vi.fn(() => Promise.resolve({ data: {}, meta: {} })),
-  };
+  const detail = vi.fn(() => Promise.reject(new Error('detail unavailable')));
+  Object.assign(source, { getAnime: detail });
   const service = new HomeService(
-    prisma as unknown as PrismaService,
-    projection as unknown as ProjectionService,
+    store as unknown as HomeStore,
     source as unknown as AnimeAv1Service,
-    anime as unknown as AnimeService,
   );
-  return { service, source, projection, snapshots };
+  return { service, source, store, snapshots, detail };
 }
 
-describe('HomeService freshness', () => {
+const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+describe('HomeService cache-only reads and coordinated refresh', () => {
   afterEach(() => vi.useRealTimers());
 
-  it('waits for one single-flight refresh and gives concurrent first visitors fresh data', async () => {
-    const { service, source, projection } = createHarness();
-    let resolveSource!: (home: SourceHome) => void;
+  it('returns stale data to 100 visitors without awaiting one hanging source flight', async () => {
+    const { service, source, store } = createHarness();
+    let resolve!: (value: SourceHome) => void;
     source.getHome.mockImplementation(
       () =>
-        new Promise<SourceHome>((resolve) => {
-          resolveSource = resolve;
+        new Promise((done) => {
+          resolve = done;
         }),
     );
-
-    const first = service.getHome();
-    const second = service.getHome();
-    await new Promise<void>((resolve) => setImmediate(resolve));
-
+    const responses = await Promise.all(
+      Array.from({ length: 100 }, () => service.getHome()),
+    );
+    await tick();
+    expect(responses).toHaveLength(100);
+    expect(
+      responses.every(
+        (response) =>
+          response.meta.stale &&
+          response.data.recentEpisodes[0].episode.number === 7,
+      ),
+    ).toBe(true);
     expect(source.getHome).toHaveBeenCalledTimes(1);
-    resolveSource(sourceHome);
-    const [firstResponse, secondResponse] = await Promise.all([first, second]);
-
-    expect(firstResponse.meta.stale).toBe(false);
-    expect(secondResponse.meta.stale).toBe(false);
-    expect(firstResponse.data.recentEpisodes[0]?.episode.number).toBe(8);
-    expect(secondResponse.data.recentEpisodes[0]?.episode.number).toBe(8);
-    expect(projection.replaceSnapshot).toHaveBeenCalledTimes(3);
+    expect(store.acquire).toHaveBeenCalledTimes(1);
+    expect(store.read.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(store.publish).not.toHaveBeenCalled();
+    const sameFlight = service.refreshIfDue();
+    expect(service.refreshIfDue()).toBe(sameFlight);
+    resolve(sourceHome);
+    await sameFlight;
+    expect(store.publish).toHaveBeenCalledTimes(1);
   });
 
-  it('serves the last good snapshot when AnimeAV1 fails', async () => {
-    const { service, source } = createHarness();
-    source.getHome.mockRejectedValue(new Error('upstream unavailable'));
-
+  it('serves a fresh complete copy without starting source work', async () => {
+    const { service, source, store, snapshots } = createHarness();
+    snapshots.forEach((snapshot) => {
+      snapshot.nextRefreshAt = new Date(Date.now() + 60_000);
+    });
     const response = await service.getHome();
-
-    expect(response.data.featured).toHaveLength(1);
-    expect(response.data.recentEpisodes).toHaveLength(1);
-    expect(response.data.recentEpisodes[0]?.episode.number).toBe(7);
-    expect(response.meta.stale).toBe(true);
+    expect(response.meta.stale).toBe(false);
+    expect(source.getHome).not.toHaveBeenCalled();
+    expect(store.acquire).not.toHaveBeenCalled();
   });
 
-  it('bounds the wait and serves last-good data while a slow refresh continues', async () => {
-    vi.useFakeTimers();
-    const { service, source } = createHarness();
-    source.getHome.mockImplementation(() => new Promise<SourceHome>(() => {}));
+  it('cold cache fails promptly and its detached failure is caught', async () => {
+    const { service, source, store } = createHarness();
+    store.read.mockResolvedValue([]);
+    source.getHome.mockRejectedValue(new Error('upstream failure'));
+    await expect(service.getHome()).rejects.toMatchObject({ status: 503 });
+    await service.refreshIfDue();
+    expect(store.release).toHaveBeenCalledWith(
+      { token: 'owner', failures: 0 },
+      true,
+      expect.any(Number),
+    );
+    expect(store.publish).not.toHaveBeenCalled();
+  });
 
-    const responsePromise = service.getHome();
-    await vi.advanceTimersByTimeAsync(HOME_REQUEST_REFRESH_TIMEOUT_MS + 1);
-    const response = await responsePromise;
-
+  it('serves partial sections independently even when featured is missing', async () => {
+    const { service, snapshots } = createHarness();
+    snapshots.shift();
+    const response = await service.getHome();
+    expect(response.data.featured).toEqual([]);
     expect(response.data.recentEpisodes).toHaveLength(1);
-    expect(response.data.recentEpisodes[0]?.episode.number).toBe(7);
+    expect(response.data.recentAnime).toHaveLength(1);
     expect(response.meta.stale).toBe(true);
+    await service.refreshIfDue();
+  });
+
+  it('marks an empty section stale instead of advertising a fresh complete home', async () => {
+    const { service, snapshots } = createHarness();
+    snapshots.forEach((snapshot) => {
+      snapshot.nextRefreshAt = new Date(Date.now() + 60_000);
+    });
+    snapshots[0].items = [];
+    const response = await service.getHome();
+    expect(response.meta.stale).toBe(true);
+    expect(response.data.recentEpisodes).toHaveLength(1);
+    await service.refreshIfDue();
+  });
+
+  it('keeps the last good in-process copy stale on database failure without changing timestamps', async () => {
+    const { service, snapshots, store } = createHarness();
+    snapshots.forEach((snapshot) => {
+      snapshot.nextRefreshAt = new Date(Date.now() + 60_000);
+    });
+    const first = await service.getHome();
+    store.read.mockRejectedValue(new Error('DB unavailable'));
+    const fallback = await service.getHome();
+    expect(fallback.data).toEqual(first.data);
+    expect(fallback.meta).toEqual({ ...first.meta, stale: true });
+  });
+
+  it('cold database failure returns unavailable without starting a source request', async () => {
+    const { service, store, source } = createHarness();
+    store.read.mockRejectedValue(new Error('DB unavailable'));
+    await expect(service.getHome()).rejects.toMatchObject({ status: 503 });
+    expect(source.getHome).not.toHaveBeenCalled();
+  });
+
+  it('does no source work when another replica owns the lease or durable backoff applies', async () => {
+    const { service, store, source } = createHarness();
+    store.acquire.mockResolvedValue(null as never);
+    await service.refreshIfDue();
+    expect(source.getHome).not.toHaveBeenCalled();
+    expect(store.publish).not.toHaveBeenCalled();
+  });
+
+  it('selects recent-only mode when the full home is fresh', async () => {
+    const { service, snapshots, store } = createHarness();
+    snapshots
+      .filter((snapshot) => snapshot.kind !== SnapshotKind.HOME_RECENT_EPISODES)
+      .forEach((snapshot) => {
+        snapshot.nextRefreshAt = new Date(Date.now() + 60_000);
+      });
+    await service.refreshIfDue();
+    expect(store.publish).toHaveBeenCalledWith(
+      sourceHome,
+      'recent',
+      expect.any(Object),
+      expect.any(AbortSignal),
+      expect.any(Number),
+      false,
+    );
+  });
+
+  it('does not scrape a fresh startup copy', async () => {
+    const { service, snapshots, source, store } = createHarness();
+    snapshots.forEach((snapshot) => {
+      snapshot.nextRefreshAt = new Date(Date.now() + 60_000);
+    });
+    await service.refreshIfDue();
+    expect(source.getHome).not.toHaveBeenCalled();
+    expect(store.release).toHaveBeenCalledWith(
+      { token: 'owner', failures: 0 },
+      false,
+    );
+  });
+
+  it('aborts source work at the aggregate deadline and cannot publish late results', async () => {
+    vi.useFakeTimers();
+    const { service, source, store } = createHarness();
+    let signal!: AbortSignal;
+    source.getHome.mockImplementation(((value: AbortSignal) => {
+      signal = value;
+      return new Promise((_resolve, reject) =>
+        value.addEventListener(
+          'abort',
+          () =>
+            reject(
+              value.reason instanceof Error
+                ? value.reason
+                : new Error('Aborted'),
+            ),
+          {
+            once: true,
+          },
+        ),
+      );
+    }) as never);
+    const refresh = service.refreshIfDue();
+    await vi.advanceTimersByTimeAsync(HOME_REFRESH_TIMEOUT_MS + 1);
+    await refresh;
+    expect(signal.aborted).toBe(true);
+    expect(store.publish).not.toHaveBeenCalled();
+  });
+
+  it('publishes core before optional details finish and still serves readers', async () => {
+    const { service, store, detail } = createHarness();
+    let rejectDetail!: (error: Error) => void;
+    detail.mockImplementation(
+      () =>
+        new Promise<never>((_resolve, reject) => {
+          rejectDetail = reject;
+        }),
+    );
+    const refreshing = service.refreshIfDue();
+    await tick();
+    expect(store.publish).toHaveBeenCalledTimes(1);
+    expect(detail).toHaveBeenCalledTimes(1);
+    expect(store.publish.mock.invocationCallOrder[0]).toBeLessThan(
+      detail.mock.invocationCallOrder[0],
+    );
+    expect((await service.getHome()).data.featured).toHaveLength(1);
+    rejectDetail(new Error('optional detail failed'));
+    await refreshing;
+    expect(store.publish).toHaveBeenCalledTimes(1);
+    expect(store.release).toHaveBeenCalledWith(
+      { token: 'owner', failures: 0 },
+      false,
+      expect.any(Number),
+    );
+  });
+
+  it('aborts optional enrichment inside the same deadline without undoing published core', async () => {
+    vi.useFakeTimers();
+    const { service, store, detail } = createHarness();
+    let signal!: AbortSignal;
+    detail.mockImplementation(((_slug: string, value: AbortSignal) => {
+      signal = value;
+      return new Promise<never>((_resolve, reject) =>
+        value.addEventListener('abort', () => reject(new Error('aborted')), {
+          once: true,
+        }),
+      );
+    }) as never);
+    const refreshing = service.refreshIfDue();
+    await vi.advanceTimersByTimeAsync(HOME_REFRESH_TIMEOUT_MS + 1);
+    await refreshing;
+    expect(signal.aborted).toBe(true);
+    expect(store.publish).toHaveBeenCalledTimes(1);
+    expect(store.enrichDetail).not.toHaveBeenCalled();
+  });
+
+  it('schedules the next durable due date, including full home between episode refreshes', async () => {
+    vi.useFakeTimers();
+    const { service, snapshots } = createHarness();
+    snapshots.forEach((snapshot) => {
+      snapshot.nextRefreshAt = new Date(Date.now() + 180_000);
+    });
+    snapshots[0].nextRefreshAt = new Date(Date.now() + 45_000);
+    expect(await service.nextRefreshDelay()).toBe(45_000);
+    snapshots[0].items = [];
+    expect(await service.nextRefreshDelay()).toBe(30_000);
+  });
+
+  it('backs off locally on database acquisition failure and caps retries at five minutes', async () => {
+    vi.useFakeTimers();
+    const { service, store } = createHarness();
+    store.acquire.mockRejectedValue(new Error('DB unavailable'));
+    await service.refreshIfDue();
+    await service.refreshIfDue();
+    expect(store.acquire).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await service.refreshIfDue();
+    expect(store.acquire).toHaveBeenCalledTimes(2);
+    expect([1, 2, 3, 4, 5, 6, 30].map(homeBackoffMs)).toEqual([
+      30_000, 60_000, 120_000, 240_000, 300_000, 300_000, 300_000,
+    ]);
   });
 });

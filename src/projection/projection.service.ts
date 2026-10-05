@@ -7,6 +7,7 @@ import {
   SourceAvailability,
 } from '../generated/prisma/enums';
 import { PrismaService } from '../prisma/prisma.service';
+import type { Prisma } from '../generated/prisma/client';
 import {
   SourceAnimeDetail,
   SourceAnimeSummary,
@@ -34,10 +35,14 @@ export function nextAnimeRefresh(
 export class ProjectionService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async upsertAnime(source: SourceAnimeSummary) {
+  async upsertAnime(
+    source: SourceAnimeSummary,
+    transaction?: Prisma.TransactionClient,
+  ) {
+    const client = transaction ?? this.prisma;
     const now = new Date();
     const category = source.category
-      ? await this.prisma.category.upsert({
+      ? await client.category.upsert({
           where: { slug: source.category.slug },
           update: { sourceId: source.category.id, name: source.category.name },
           create: {
@@ -47,7 +52,7 @@ export class ProjectionService {
           },
         })
       : null;
-    const anime = await this.prisma.anime.upsert({
+    const anime = await client.anime.upsert({
       where: { sourceId: source.id },
       update: {
         slug: source.slug,
@@ -88,7 +93,7 @@ export class ProjectionService {
     if (source.genres.length > 0) {
       const genres = await Promise.all(
         source.genres.map((genre) =>
-          this.prisma.genre.upsert({
+          client.genre.upsert({
             where: { slug: genre.slug },
             update: { sourceId: genre.id, name: genre.name },
             create: {
@@ -99,16 +104,18 @@ export class ProjectionService {
           }),
         ),
       );
-      await this.prisma.$transaction([
-        this.prisma.animeGenre.deleteMany({ where: { animeId: anime.id } }),
-        this.prisma.animeGenre.createMany({
+      const replaceGenres = async (tx: Prisma.TransactionClient) => {
+        await tx.animeGenre.deleteMany({ where: { animeId: anime.id } });
+        await tx.animeGenre.createMany({
           data: genres.map((genre) => ({
             animeId: anime.id,
             genreId: genre.id,
           })),
           skipDuplicates: true,
-        }),
-      ]);
+        });
+      };
+      if (transaction) await replaceGenres(transaction);
+      else await this.prisma.$transaction(replaceGenres);
     }
     return anime;
   }
@@ -164,8 +171,12 @@ export class ProjectionService {
     return anime;
   }
 
-  async upsertEpisode(animeId: string, source: SourceEpisode) {
-    return this.prisma.episode.upsert({
+  async upsertEpisode(
+    animeId: string,
+    source: SourceEpisode,
+    transaction?: Prisma.TransactionClient,
+  ) {
+    return (transaction ?? this.prisma).episode.upsert({
       where: { sourceId: source.id },
       update: {
         animeId,

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { unflatten } from 'devalue';
 import pLimit from 'p-limit';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { z } from 'zod';
 import {
   SourceAnimeDetail,
@@ -139,19 +140,52 @@ export class AnimeAv1Service {
     );
   }
 
-  async getHome(): Promise<SourceHome> {
-    const data = homeSchema.parse(await this.fetchRoute('/'));
+  async getHome(
+    signal: AbortSignal = AbortSignal.timeout(15_000),
+  ): Promise<SourceHome> {
+    const payload = z
+      .object({
+        featured: z.unknown().optional(),
+        latestEpisodes: z.unknown().optional(),
+        latestMedia: z.unknown().optional(),
+      })
+      .parse(await this.fetchRoute('/', new URLSearchParams(), signal));
+    // Validate independently. An empty/malformed section preserves its own last
+    // good copy; it must not suppress valid updates to other sections.
+    const featured = homeSchema.shape.featured.safeParse(payload.featured);
+    const episodes = homeSchema.shape.latestEpisodes.safeParse(
+      payload.latestEpisodes,
+    );
+    const recent = homeSchema.shape.latestMedia.safeParse(payload.latestMedia);
+    const distinct = <T extends { id: string | number }>(items: T[]) =>
+      new Set(items.map((item) => String(item.id))).size === items.length
+        ? items
+        : [];
+    if (!featured.success || !episodes.success || !recent.success) {
+      this.logger.warn({
+        event: 'home.source.partial',
+        featured: featured.success,
+        episodes: episodes.success,
+        recent: recent.success,
+      });
+    }
     return {
-      featured: data.featured.map((anime) => this.normalizeAnime(anime)),
-      recentEpisodes: data.latestEpisodes.map((episode) => ({
-        anime: this.normalizeAnime(episode.media),
-        episode: this.normalizeEpisode(
-          episode,
-          episode.media.slug,
-          String(episode.media.id),
-        ),
-      })),
-      recentAnime: data.latestMedia.map((anime) => this.normalizeAnime(anime)),
+      featured: distinct(featured.success ? featured.data : []).map((anime) =>
+        this.normalizeAnime(anime),
+      ),
+      recentEpisodes: distinct(episodes.success ? episodes.data : []).map(
+        (episode) => ({
+          anime: this.normalizeAnime(episode.media),
+          episode: this.normalizeEpisode(
+            episode,
+            episode.media.slug,
+            String(episode.media.id),
+          ),
+        }),
+      ),
+      recentAnime: distinct(recent.success ? recent.data : []).map((anime) =>
+        this.normalizeAnime(anime),
+      ),
     };
   }
 
@@ -175,9 +209,16 @@ export class AnimeAv1Service {
     };
   }
 
-  async getAnime(slug: string): Promise<SourceAnimeDetail> {
+  async getAnime(
+    slug: string,
+    signal?: AbortSignal,
+  ): Promise<SourceAnimeDetail> {
     const data = animeDetailSchema.parse(
-      await this.fetchRoute(`/media/${encodeURIComponent(slug)}`),
+      await this.fetchRoute(
+        `/media/${encodeURIComponent(slug)}`,
+        new URLSearchParams(),
+        signal,
+      ),
     );
     const media = data.media;
     const aliases = media.aka ? Object.values(media.aka).filter(Boolean) : [];
@@ -248,23 +289,34 @@ export class AnimeAv1Service {
   private async fetchRoute(
     path: string,
     params = new URLSearchParams(),
+    signal?: AbortSignal,
   ): Promise<unknown> {
     const dataPath = path === '/' ? '/__data.json' : `${path}/__data.json`;
     const query = params.toString();
     const url = `${this.baseUrl}${dataPath}${query ? `?${query}` : ''}`;
-    return this.limit(async () => {
+    signal?.throwIfAborted();
+    const work = this.limit(async () => {
+      signal?.throwIfAborted();
       let lastError: unknown;
-      for (let attempt = 0; attempt < 3; attempt += 1) {
+      const attempts = signal ? 2 : 3;
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        signal?.throwIfAborted();
         try {
           const response = await fetch(url, {
             headers: {
               accept: 'application/json',
               'user-agent': this.userAgent,
             },
-            signal: AbortSignal.timeout(12_000),
+            signal: signal
+              ? AbortSignal.any([signal, AbortSignal.timeout(6_000)])
+              : AbortSignal.timeout(12_000),
           });
-          if (response.status === 404) throw new AnimeAv1NotFoundError(path);
+          if (response.status === 404) {
+            await response.body?.cancel();
+            throw new AnimeAv1NotFoundError(path);
+          }
           if (!response.ok) {
+            await response.body?.cancel();
             if (![429, 503].includes(response.status)) {
               throw new AnimeAv1UnavailableError(
                 `Source status ${response.status}`,
@@ -288,12 +340,13 @@ export class AnimeAv1Service {
           if (!node) throw new AnimeAv1UnavailableError('Missing route data');
           return unflatten(node.data) as unknown;
         } catch (error) {
+          signal?.throwIfAborted();
           if (error instanceof AnimeAv1NotFoundError) throw error;
           lastError = error;
-          if (attempt < 2) {
-            await new Promise((resolve) =>
-              setTimeout(resolve, 350 * 2 ** attempt + Math.random() * 200),
-            );
+          if (attempt < attempts - 1) {
+            await sleep(350 * 2 ** attempt + Math.random() * 200, undefined, {
+              signal,
+            });
           }
         }
       }
@@ -301,6 +354,19 @@ export class AnimeAv1Service {
       throw new AnimeAv1UnavailableError(
         lastError instanceof Error ? lastError.message : 'Source unavailable',
       );
+    });
+    if (!signal) return work;
+    // Abort the wait even while queued. The queued callback checks the same
+    // signal before issuing fetch, so it cannot become a late upstream request.
+    return new Promise((resolve, reject) => {
+      const abort = () =>
+        reject(
+          signal.reason instanceof Error ? signal.reason : new Error('Aborted'),
+        );
+      signal.addEventListener('abort', abort, { once: true });
+      work
+        .then(resolve, reject)
+        .finally(() => signal.removeEventListener('abort', abort));
     });
   }
 

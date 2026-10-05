@@ -1,50 +1,42 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HomeService } from './home.service';
-
-export const HOME_RECENT_REFRESH_INTERVAL_MS = 3 * 60_000;
+import { HOME_RETRY_INTERVAL_MS } from './home-policy';
+export {
+  HOME_FULL_REFRESH_INTERVAL_MS,
+  HOME_RECENT_REFRESH_INTERVAL_MS,
+} from './home-policy';
 
 @Injectable()
 export class HomeRefreshScheduler implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(HomeRefreshScheduler.name);
   private timer?: NodeJS.Timeout;
-
+  private stopped = false;
   constructor(
     private readonly config: ConfigService,
     private readonly home: HomeService,
   ) {}
-
   onModuleInit() {
     if (this.config.get<string>('JOBS_ENABLED', 'true') === 'false') return;
-    // This heartbeat is process-local, matching ScheduleRefreshScheduler. The
-    // current deployment has one JOBS_ENABLED API replica. If the API is scaled
-    // horizontally, keep JOBS_ENABLED on a single worker replica (pg-boss is
-    // already the project's distributed-work mechanism) before enabling it on
-    // more replicas; duplicating this cheap source read is safe but unnecessary.
-    this.runRefresh();
-    this.timer = setInterval(
-      () => this.runRefresh(),
-      HOME_RECENT_REFRESH_INTERVAL_MS,
-    );
-    this.timer.unref?.();
+    void this.run();
   }
-
   onModuleDestroy() {
-    if (this.timer) clearInterval(this.timer);
+    this.stopped = true;
+    if (this.timer) clearTimeout(this.timer);
   }
-
-  private runRefresh() {
-    void this.home.refreshRecentEpisodes().catch((error) => {
-      this.logger.warn(
-        `Scheduled recent-episode refresh failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    });
+  private async run() {
+    let delay = HOME_RETRY_INTERVAL_MS;
+    try {
+      // Durable deadlines schedule episodes at 3 minutes and full home at 10,
+      // independently of visits. Fresh boot copies aren't scraped again.
+      await this.home.refreshIfDue();
+      delay = await this.home.nextRefreshDelay();
+    } catch {
+      /* Retry database outages without an unhandled background rejection. */
+    }
+    if (this.stopped) return;
+    this.timer = setTimeout(() => {
+      void this.run();
+    }, delay);
+    this.timer.unref?.();
   }
 }

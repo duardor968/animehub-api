@@ -278,3 +278,13 @@ model DownloadJobItem {
   @@unique([jobId, episodeId])
   @@index([jobId, status])
 }
+
+// One durable lease coordinates all full/recent home refreshes across replicas.
+// A token fences publishers; failed and partial runs share bounded backoff.
+model HomeRefreshLease {
+  key           String   @id
+  token         String?
+  expiresAt     DateTime @default(now())
+  nextAttemptAt DateTime @default(now())
+  failures      Int      @default(0)
+}
