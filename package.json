@@ -7,7 +7,7 @@
   "scripts": {
     "build": "prisma generate && nest build",
     "dev": "nest start --watch --path tsconfig.dev.json",
-    "format": "prettier --write \"src/**/*.ts\" \"!src/generated/**\" \"test/**/*.ts\" \"prisma.config.ts\"",
+    "format": "prettier --write .",
     "start": "nest start",
     "start:dev": "nest start --watch --path tsconfig.dev.json",
     "start:debug": "nest start --debug --watch",
@@ -18,10 +18,16 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "openapi:generate": "prisma generate && nest build && node dist/generate-openapi.js && openapi-typescript openapi.json -o ../web/src/lib/api/generated.ts && prettier --write openapi.json ../web/src/lib/api/generated.ts",
+    "openapi:generate": "prisma generate && nest build && node dist/generate-openapi.js && prettier --write openapi.json",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
-    "test:integration": "node -e \"if (!process.env.TEST_DATABASE_URL) throw new Error('TEST_DATABASE_URL is required for integration tests')\" && vitest run src/home/home-store.integration.spec.ts"
+    "test:integration": "node -e \"if (!process.env.TEST_DATABASE_URL) throw new Error('TEST_DATABASE_URL is required for integration tests')\" && vitest run src/home/home-store.integration.spec.ts",
+    "format:check": "prettier --check .",
+    "audit:ci": "node scripts/audit-dependencies.mjs",
+    "test:audit": "node --test scripts/audit-dependencies.test.mjs",
+    "openapi:check": "pnpm openapi:generate && git diff --exit-code -- openapi.json",
+    "prisma:migrate": "prisma migrate deploy",
+    "test:shutdown": "node scripts/check-shutdown.mjs"
   },
   "dependencies": {
     "@fastify/helmet": "13.1.0",
@@ -99,5 +105,10 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
+  },
+  "packageManager": "pnpm@11.20.0",
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=11.20.0"
   }
 }

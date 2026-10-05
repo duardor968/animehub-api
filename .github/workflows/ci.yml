@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: animehub
+          POSTGRES_USER: animehub_dev
+          POSTGRES_PASSWORD: animehub_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U animehub_dev -d animehub"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://animehub_dev:animehub_ci@127.0.0.1:5432/animehub
+      PORT: 8000
+      CORS_ORIGINS: http://localhost:3000
+      JOBS_ENABLED: 'false'
+      LOG_LEVEL: silent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.13.0
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@11.20.0 --activate
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Apply migrations
+        run: pnpm prisma:migrate
+      - name: Validate Prisma
+        run: pnpm prisma:validate
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+      - name: Check formatting
+        run: pnpm format:check
+      - name: Lint
+        run: pnpm lint
+      - name: Type-check
+        run: pnpm typecheck
+      - name: Run unit tests
+        run: pnpm test
+      - name: Test home transactions and distributed lease
+        run: pnpm test:integration
+        env:
+          TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+      - name: Check OpenAPI contract drift
+        run: pnpm openapi:check
+      - name: Verify dependency audit policy
+        run: pnpm test:audit
+      - name: Audit production and report development dependencies
+        run: pnpm audit:ci
+      - name: Build API
+        run: pnpm build
+      - name: Verify graceful shutdown with jobs enabled
+        run: pnpm test:shutdown
+        env:
+          TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build --tag animehub-api:test .

@@ -1,0 +1,22 @@
+node_modules/
+.next/
+dist/
+dist-dev/
+coverage/
+*.lcov
+generated/
+.env
+.env.*
+!.env.example
+*.log
+*.tsbuildinfo
+.vscode/
+.agents/
+.claude/
+skills-lock.json
+/tmp
+
+# Public repo: keep infrastructure/agent docs out of version control
+AGENTS.md
+CLAUDE.md
+cloud.env

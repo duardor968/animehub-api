@@ -1,29 +1,22 @@
 FROM node:24-alpine AS build
-
 RUN corepack enable
-WORKDIR /workspace
-
+WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/api/package.json apps/api/package.json
-COPY apps/web/package.json apps/web/package.json
 RUN pnpm install --frozen-lockfile
-
-COPY apps/api apps/api
-RUN pnpm --filter @animehub/api build
+COPY . .
+RUN pnpm build
 
 FROM node:24-alpine AS runtime
-
 ENV NODE_ENV=production
-RUN corepack enable
-# curl for the container healthcheck (Alpine has no curl; BusyBox wget lacks
-# the GNU --spider/--tries flags). Matches the sibling projects' images.
-RUN apk add --no-cache curl
-WORKDIR /workspace
-
-COPY --from=build /workspace/package.json /workspace/pnpm-lock.yaml /workspace/pnpm-workspace.yaml ./
-COPY --from=build /workspace/node_modules node_modules
-COPY --from=build /workspace/apps/api apps/api
-COPY --from=build /workspace/apps/web/package.json apps/web/package.json
-
+ENV PORT=8000
+RUN corepack enable && apk add --no-cache curl tini
+WORKDIR /app
+COPY --from=build /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/prisma ./prisma
+COPY --from=build /app/prisma.config.ts ./prisma.config.ts
 EXPOSE 8000
-CMD ["sh", "-c", "pnpm --filter @animehub/api exec prisma migrate deploy && pnpm --filter @animehub/api start:prod"]
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=5 CMD curl -fsS http://localhost:8000/api/v1/health/ready || exit 1
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && exec node dist/main.js"]

@@ -12,6 +12,7 @@ async function bootstrap() {
   );
   const config = app.get(ConfigService);
   await configureApp(app);
+  app.enableShutdownHooks();
 
   const port = config.get<number>('PORT', 8000);
   await app.listen(port, '0.0.0.0');
