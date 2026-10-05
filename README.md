@@ -129,7 +129,7 @@ La imagen expone el puerto `8000`. Al arrancar aplica las migraciones pendientes
 
 Esta separación conserva el dominio público y debe reutilizar la base y el esquema existentes. Cambiar de repositorio no requiere empezar con una base vacía. Antes de sustituir una instancia, revisa las migraciones y los trabajos activos; un healthcheck correcto no garantiza por sí solo un despliegue sin interrupciones.
 
-Este repositorio nace de la separación de `apps/api` del [monorepo AnimeHub Web](https://github.com/duardor968/animehub-web), conservando su historial. El monorepo anterior queda como referencia hasta terminar la migración.
+Este repositorio nace de la separación de `apps/api` del [monorepo AnimeHub Web](https://github.com/duardor968/animehub-web), conservando su historial. El monorepo anterior está archivado y se conserva como referencia histórica.
 
 ## Licencia
 
