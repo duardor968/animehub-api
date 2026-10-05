@@ -75,6 +75,7 @@ describe.skipIf(!testUrl)(
       }
       const url = new URL(testUrl!);
       url.searchParams.set('schema', schema);
+      url.searchParams.set('options', '-c timezone=America/New_York');
       const config = new ConfigService({ DATABASE_URL: url.toString() });
       prisma = new PrismaService(config);
       projection = new ProjectionService(prisma);
@@ -156,9 +157,18 @@ describe.skipIf(!testUrl)(
     });
 
     it('publishes all sections and their relational records atomically with shared freshness', async () => {
+      const timezone = await prisma.$queryRaw<
+        { timezone: string }[]
+      >`SELECT current_setting('TimeZone') AS timezone`;
+      expect(timezone[0].timezone).toBe('America/New_York');
       await publish();
       const snapshots = await second.read();
       expect(snapshots).toHaveLength(3);
+      // The test database may use a non-UTC timezone. Freshness must still be
+      // absolute UTC time, rather than the server's timezone-naive wall clock.
+      expect(
+        Math.abs(snapshots[0].fetchedAt.getTime() - Date.now()),
+      ).toBeLessThan(5_000);
       expect(
         new Set(snapshots.map((entry) => entry.fetchedAt.toISOString())).size,
       ).toBe(1);

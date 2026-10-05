@@ -294,10 +294,12 @@ export class HomeStore implements OnModuleDestroy {
   }
 
   private async databaseNow(tx: Prisma.TransactionClient) {
-    const rows = await tx.$queryRaw<
-      { now: Date }[]
-    >`SELECT clock_timestamp() AS now`;
-    return rows[0].now;
+    // Epoch avoids the adapter's timezone-naive raw DateTime conversion. A DB
+    // session in another timezone must not publish already-stale UTC snapshots.
+    const rows = await tx.$queryRaw<{ nowMs: bigint }[]>`
+      SELECT (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint AS "nowMs"
+    `;
+    return new Date(Number(rows[0].nowMs));
   }
 
   private transaction<T>(
