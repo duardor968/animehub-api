@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import {
   AnimeStatus,
-  RelationKind,
   SnapshotKind,
   SourceAvailability,
 } from '../generated/prisma/enums';
@@ -79,7 +78,7 @@ export class ProjectionService {
         synopsis: source.synopsis,
         posterUrl: source.posterUrl,
         backdropUrl: source.backdropUrl,
-        status: source.status as AnimeStatus,
+        status: source.status,
         categoryId: category?.id ?? null,
         startDate: source.startDate,
         mature: source.mature,
@@ -298,7 +297,7 @@ export class ProjectionService {
           targetTitle: relation.anime.title,
           targetPosterUrl: relation.anime.posterUrl,
           targetYear: relation.anime.startDate?.getUTCFullYear(),
-          kind: relation.kind as RelationKind,
+          kind: relation.kind,
           position,
         },
       });

@@ -33,7 +33,7 @@ export async function configureApp(app: NestFastifyApplication) {
     contentSecurityPolicy: false,
     crossOriginResourcePolicy: { policy: 'same-site' },
   });
-  await app.register(rateLimit as never, {
+  await app.register(rateLimit, {
     max: 120,
     timeWindow: '1 minute',
   });

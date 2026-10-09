@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { AudioType, DownloadProvider } from '../generated/prisma/enums';
 import { PrismaService } from '../prisma/prisma.service';
 import { AnimeAv1Service } from '../source/animeav1.service';
 import { AnimeService } from '../anime/anime.service';
@@ -133,8 +132,8 @@ export class DownloadResolverService {
         this.prisma.downloadLink.createMany({
           data: source.links.map((link) => ({
             episodeId: episode.id,
-            audio: link.audio as AudioType,
-            provider: link.provider as DownloadProvider,
+            audio: link.audio,
+            provider: link.provider,
             url: link.url,
             fetchedAt: now,
             expiresAt,

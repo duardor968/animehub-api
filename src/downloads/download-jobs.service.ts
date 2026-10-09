@@ -11,10 +11,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import pLimit from 'p-limit';
 import { PgBoss } from 'pg-boss';
 import {
-  AudioType,
   DownloadJobItemStatus,
   DownloadJobStatus,
-  DownloadProvider,
   Prisma,
 } from '../generated/prisma/client';
 import { AnimeService } from '../anime/anime.service';
@@ -109,8 +107,8 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
       data: {
         animeId: anime.id,
         accessTokenHash: hashCapabilityToken(accessToken),
-        requestedAudio: input.audio as AudioType,
-        providers: input.providers as DownloadProvider[],
+        requestedAudio: input.audio,
+        providers: input.providers,
         packageName: anime.title,
         totalItems: episodes.length,
         expiresAt,
@@ -232,7 +230,7 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
                   status: resolved.errorCode
                     ? DownloadJobItemStatus.FAILED
                     : DownloadJobItemStatus.COMPLETED,
-                  resolvedAudio: resolved.audio as AudioType,
+                  resolvedAudio: resolved.audio,
                   links: resolved.links as unknown as Prisma.InputJsonValue,
                   errorCode: resolved.errorCode,
                 },
