@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -32,7 +33,8 @@ type StoredJob = {
   episodeIds: string[];
 };
 
-const KEY = '3f1c9a52-7d4e-4b8a-9c61-2e5f0d7a8b14';
+// Generated per run: a literal UUID next to the word "key" trips secret scanners.
+const KEY = randomUUID();
 
 function harness(numbers = [1, 2, 3]) {
   const episodes = numbers.map((number) => ({ id: `ep-${number}`, number }));
