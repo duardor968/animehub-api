@@ -150,11 +150,12 @@ describe('HTTP error mapping through Nest + Fastify', () => {
   });
 });
 
-describe('rate limit allow list', () => {
+describe('rate limit keys behind trusted proxies', () => {
   let app: NestFastifyApplication;
 
   beforeAll(async () => {
-    vi.stubEnv('RATE_LIMIT_ALLOWLIST', ' 10.0.0.5 , 127.0.0.1');
+    // app.inject() connects from 127.0.0.1: here, the web server.
+    vi.stubEnv('TRUST_PROXY', '127.0.0.1');
     app = await NestFactory.create<NestFastifyApplication>(
       ProbeModule,
       createFastifyAdapter(),
@@ -170,26 +171,33 @@ describe('rate limit allow list', () => {
     await app.close();
   });
 
-  it('exempts listed addresses such as the web server', async () => {
+  const fromVisitor = (visitor: string) =>
+    app.inject({
+      url: '/api/v1/probe/limited',
+      headers: { 'x-forwarded-for': visitor },
+    });
+
+  it('gives each visitor its own bucket for SSR requests relayed by the web', async () => {
+    const first = await fromVisitor('203.0.113.7');
+    const again = await fromVisitor('203.0.113.7');
+    const other = await fromVisitor('198.51.100.4');
+
+    expect(first.statusCode).toBe(200);
+    expect(again.statusCode).toBe(429);
+    expect(other.statusCode).toBe(200);
+  });
+
+  it('does not let an untrusted peer pick its bucket with X-Forwarded-For', async () => {
     const statuses = [];
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (const visitor of ['192.0.2.1', '192.0.2.2']) {
       const response = await app.inject({
         url: '/api/v1/probe/limited',
-        remoteAddress: '127.0.0.1',
+        remoteAddress: '203.0.113.50',
+        headers: { 'x-forwarded-for': visitor },
       });
       statuses.push(response.statusCode);
     }
-    const other = await app.inject({
-      url: '/api/v1/probe/limited',
-      remoteAddress: '203.0.113.9',
-    });
-    const otherAgain = await app.inject({
-      url: '/api/v1/probe/limited',
-      remoteAddress: '203.0.113.9',
-    });
 
-    expect(statuses).toEqual([200, 200, 200]);
-    expect(other.statusCode).toBe(200);
-    expect(otherAgain.statusCode).toBe(429);
+    expect(statuses).toEqual([200, 429]);
   });
 });

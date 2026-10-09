@@ -6,10 +6,15 @@ export const MAX_ROUTE_PARAM_LENGTH = 1024;
 
 /**
  * Parses TRUST_PROXY for Fastify's `trustProxy`, which decides whether
- * `request.ip` (the rate-limit key) comes from X-Forwarded-For. Behind a reverse
- * proxy, or for SSR requests relayed by the web server, leaving it off makes
- * every client share one rate-limit bucket. Only enable it for hops that
- * overwrite the header, otherwise clients can spoof their address.
+ * `request.ip` (the rate-limit key) is read from X-Forwarded-For. When off, the
+ * key is the socket peer: behind a reverse proxy every client shares the
+ * proxy's bucket, and every SSR request shares the web server's bucket.
+ * Turning it on only helps when each trusted hop sets the header: the web
+ * server must send the visitor's IP in X-Forwarded-For on its server-side
+ * requests, and TRUST_PROXY must name it (and any proxy in front of the API).
+ * Never trust a hop that relays a client-supplied header unchecked, or clients
+ * can spoof their address. Prefer addresses over a hop count when browser and
+ * SSR requests reach the API through a different number of hops.
  * Unset/"false" → off; "true" → trust every hop; "<n>" → trust n hops;
  * anything else → comma-separated trusted addresses/CIDRs.
  */
