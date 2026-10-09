@@ -1,0 +1,3 @@
+# False positive: a fixed UUID used as a test idempotency key, since replaced
+# by randomUUID() in the spec. The fingerprint pins only that historical line.
+04780089826d158174bbf6b3ffed02fc052dcbf4:src/downloads/download-jobs.idempotency.spec.ts:generic-api-key:35
