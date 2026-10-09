@@ -6,6 +6,11 @@ import { API_CACHE_CONTROL } from './common/no-store.interceptor';
 import { configureApp } from './configure-app';
 import { createFastifyAdapter } from './fastify-adapter';
 import {
+  DownloadJobsController,
+  JOB_POLL_RATE_LIMIT,
+} from './downloads/download-jobs.controller';
+import { DownloadJobsService } from './downloads/download-jobs.service';
+import {
   AnimeAv1NotFoundError,
   AnimeAv1UnavailableError,
 } from './source/animeav1.service';
@@ -199,5 +204,92 @@ describe('rate limit keys behind trusted proxies', () => {
     }
 
     expect(statuses).toEqual([200, 429]);
+  });
+});
+
+describe('download job polling limit', () => {
+  const origin = 'http://localhost:3000';
+  let app: NestFastifyApplication;
+
+  @Module({
+    imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true })],
+    controllers: [DownloadJobsController],
+    providers: [
+      {
+        provide: DownloadJobsService,
+        useValue: {
+          get: (id: string) => Promise.resolve({ data: { id } }),
+        },
+      },
+    ],
+  })
+  class JobsProbeModule {}
+
+  beforeAll(async () => {
+    vi.stubEnv('CORS_ORIGINS', origin);
+    app = await NestFactory.create<NestFastifyApplication>(
+      JobsProbeModule,
+      createFastifyAdapter(),
+      { logger: false },
+    );
+    await configureApp(app);
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+  });
+
+  afterAll(async () => {
+    vi.unstubAllEnvs();
+    await app.close();
+  });
+
+  const poll = (job: string, remoteAddress = '203.0.113.20') =>
+    app.inject({
+      url: `/api/v1/download-jobs/${job}`,
+      remoteAddress,
+      headers: { origin, authorization: 'Bearer capability' },
+    });
+
+  it('lets one address poll several jobs, then answers 429 a browser can act on', async () => {
+    const statuses = new Set<number>();
+    // Five jobs polled every 1.25 s for a minute (48 polls each) fit.
+    for (let round = 0; round < 48; round += 1) {
+      for (let job = 1; job <= 5; job += 1) {
+        statuses.add((await poll(`job-${job}`)).statusCode);
+      }
+    }
+    for (let extra = 5 * 48; extra < JOB_POLL_RATE_LIMIT; extra += 1) {
+      statuses.add((await poll('job-1')).statusCode);
+    }
+    const limited = await poll('job-1');
+    const otherVisitor = await poll('job-1', '198.51.100.20');
+
+    expect([...statuses]).toEqual([200]);
+    expect(limited.statusCode).toBe(429);
+    expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
+    expect(limited.headers['access-control-allow-origin']).toBe(origin);
+    expect(
+      String(limited.headers['access-control-expose-headers'])
+        .toLowerCase()
+        .split(/\s*,\s*/),
+    ).toEqual(expect.arrayContaining(['retry-after', 'x-ratelimit-remaining']));
+    expect(otherVisitor.statusCode).toBe(200);
+  });
+
+  it('allows the Idempotency-Key header in cross-origin job requests', async () => {
+    const preflight = await app.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/anime/one-piece/download-jobs',
+      headers: {
+        origin,
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'content-type,idempotency-key',
+      },
+    });
+
+    expect(preflight.statusCode).toBe(204);
+    expect(preflight.headers['access-control-allow-origin']).toBe(origin);
+    expect(
+      String(preflight.headers['access-control-allow-headers']).toLowerCase(),
+    ).toContain('idempotency-key');
   });
 });

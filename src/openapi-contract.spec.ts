@@ -127,4 +127,19 @@ describe('generated OpenAPI contract', () => {
     expect(operation?.responses?.[409]).toBeDefined();
     expect(operation?.responses?.[422]).toBeDefined();
   });
+
+  it('documents Retry-After on every 429', () => {
+    const limited = Object.values(document.paths).flatMap((item) =>
+      Object.values(item ?? {}).flatMap((operation: unknown) => {
+        const responses = (
+          operation as { responses?: Record<string, { headers?: object }> }
+        ).responses;
+        return responses?.[429] ? [responses[429]] : [];
+      }),
+    );
+    expect(limited.length).toBeGreaterThan(5);
+    for (const response of limited) {
+      expect(response.headers).toHaveProperty('Retry-After');
+    }
+  });
 });
