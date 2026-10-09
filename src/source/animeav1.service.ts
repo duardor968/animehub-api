@@ -131,6 +131,27 @@ const scheduleSchema = z.object({
 export class AnimeAv1NotFoundError extends Error {}
 export class AnimeAv1UnavailableError extends Error {}
 
+// AnimeAV1 relation type codes, from the label table in its own client bundle
+// (`{1:Precuela,2:Secuela,3:Ambientación Alternativa,4:Versión Alternativa,
+// 5:Historia Paralela,6:Resumen,7:Historia Completa,8:Historia Principal,
+// 9:Spin-off,10:Otro}`; unknown codes render as "Otro" there too). Every code
+// has its own kind so no source label is lost; most franchise movies/specials
+// really are 10 ("Otro") at the source.
+export const ANIMEAV1_RELATION_KINDS: Readonly<
+  Record<number, SourceRelation['kind']>
+> = {
+  1: 'PREQUEL',
+  2: 'SEQUEL',
+  3: 'ALTERNATIVE_SETTING',
+  4: 'ALTERNATIVE',
+  5: 'SIDE_STORY',
+  6: 'SUMMARY',
+  7: 'FULL_STORY',
+  8: 'MAIN_STORY',
+  9: 'SPIN_OFF',
+  10: 'OTHER',
+};
+
 @Injectable()
 export class AnimeAv1Service {
   private readonly logger = new Logger(AnimeAv1Service.name);
@@ -479,24 +500,8 @@ export class AnimeAv1Service {
     type: number,
     destination: z.infer<typeof animeSchema>,
   ): SourceRelation {
-    // AnimeAV1 relation type codes, taken from its own client bundle:
-    // 1 Precuela · 2 Secuela · 3 Ambientación alternativa · 4 Versión alternativa
-    // 5 Historia paralela · 6 Resumen · 7 Historia completa · 8 Historia principal
-    // 9 Spin-off. Our RelationKind enum is coarser, so several map to the nearest
-    // value (both alternatives → ALTERNATIVE; full/main story → MAIN_STORY;
-    // spin-off has no equivalent → OTHER).
-    const kinds: Record<number, SourceRelation['kind']> = {
-      1: 'PREQUEL',
-      2: 'SEQUEL',
-      3: 'ALTERNATIVE',
-      4: 'ALTERNATIVE',
-      5: 'SIDE_STORY',
-      6: 'SUMMARY',
-      7: 'MAIN_STORY',
-      8: 'MAIN_STORY',
-    };
     return {
-      kind: kinds[type] ?? 'OTHER',
+      kind: ANIMEAV1_RELATION_KINDS[type] ?? 'OTHER',
       anime: this.normalizeAnime(destination),
     };
   }

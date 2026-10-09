@@ -33,6 +33,8 @@ enum SnapshotKind {
   SCHEDULE
 }
 
+// One kind per AnimeAV1 relation code (see ANIMEAV1_RELATION_KINDS). Values
+// added later are appended, so the PostgreSQL enum order matches this list.
 enum RelationKind {
   PREQUEL
   SEQUEL
@@ -41,6 +43,9 @@ enum RelationKind {
   SUMMARY
   ALTERNATIVE
   OTHER
+  ALTERNATIVE_SETTING
+  FULL_STORY
+  SPIN_OFF
 }
 
 enum AudioType {
