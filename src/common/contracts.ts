@@ -30,7 +30,11 @@ export class AnimeSummaryDto {
 }
 
 export class FeaturedAnimeDto extends AnimeSummaryDto {
-  @ApiProperty({ type: [CategoryDto] }) genres!: CategoryDto[];
+  @ApiProperty({
+    type: [CategoryDto],
+    description: 'Sorted by name (Spanish collation).',
+  })
+  genres!: CategoryDto[];
   @ApiPropertyOptional({ type: Number, nullable: true }) episodeCount!:
     number | null;
   @ApiPropertyOptional({ type: String, nullable: true }) trailerUrl!:
@@ -131,7 +135,11 @@ export class AnimeDetailDto extends AnimeSummaryDto {
   @ApiPropertyOptional({ type: Number, nullable: true }) score!: number | null;
   @ApiPropertyOptional({ type: Number, nullable: true }) votes!: number | null;
   @ApiProperty() sourceUrl!: string;
-  @ApiProperty({ type: [CategoryDto] }) genres!: CategoryDto[];
+  @ApiProperty({
+    type: [CategoryDto],
+    description: 'Sorted by name (Spanish collation).',
+  })
+  genres!: CategoryDto[];
   @ApiProperty({ type: [RelationDto] }) relations!: RelationDto[];
 }
 

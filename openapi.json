@@ -1116,6 +1116,7 @@
             "type": "boolean"
           },
           "genres": {
+            "description": "Sorted by name (Spanish collation).",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CategoryDto"
@@ -1366,6 +1367,7 @@
             "type": "string"
           },
           "genres": {
+            "description": "Sorted by name (Spanish collation).",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/CategoryDto"

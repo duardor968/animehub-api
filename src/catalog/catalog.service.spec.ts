@@ -91,6 +91,59 @@ describe('CatalogService out-of-range pages', () => {
     expect(source.getCatalog).toHaveBeenCalledTimes(1);
   });
 
+  it('reports uncapped totals and orders genres with Spanish collation', async () => {
+    const snapshot = {
+      id: 'recent',
+      items: [],
+      totalPages: 37,
+      totalRecords: 731,
+      minYear: 2024,
+      maxYear: 2026,
+      fetchedAt: new Date(),
+      nextRefreshAt: new Date(Date.now() + 30 * 60_000),
+    };
+    const genre = (name: string, slug: string) => ({
+      sourceId: slug,
+      name,
+      slug,
+    });
+    const prisma = {
+      snapshot: { findUnique: vi.fn(() => Promise.resolve(snapshot)) },
+      category: { findMany: vi.fn(() => Promise.resolve([])) },
+      genre: {
+        findMany: vi.fn(() =>
+          Promise.resolve([
+            genre('Vampiros', 'vampiros'),
+            genre('Ciencia Ficción', 'ciencia-ficcion'),
+            genre('Ánime Clásico', 'anime-clasico'),
+            genre('Acción', 'accion'),
+            genre('Comedia', 'comedia'),
+          ]),
+        ),
+      },
+    };
+    const service = new CatalogService(
+      prisma as unknown as PrismaService,
+      {} as ProjectionService,
+      {} as AnimeAv1Service,
+    );
+
+    const response = await service.getCatalog({ page: 99, minYear: 2024 });
+
+    expect(response.meta).toMatchObject({
+      totalRecords: 731,
+      capped: false,
+      perPage: 20,
+    });
+    expect(response.meta.genres.map((g) => g.name)).toEqual([
+      'Acción',
+      'Ánime Clásico',
+      'Ciencia Ficción',
+      'Comedia',
+      'Vampiros',
+    ]);
+  });
+
   it('does not return a false empty success when an in-range refresh remains degenerate', async () => {
     const fetchedAt = new Date(Date.now() - 60 * 60_000);
     const snapshot = {

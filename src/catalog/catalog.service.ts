@@ -6,7 +6,11 @@ import {
 import { createHash } from 'node:crypto';
 import { SnapshotKind } from '../generated/prisma/enums';
 import { CatalogResponseDto, SuggestionResponseDto } from '../common/contracts';
-import { serializeAnime, serializeCategory } from '../common/serializers';
+import {
+  serializeAnime,
+  serializeCategory,
+  sortByName,
+} from '../common/serializers';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectionService } from '../projection/projection.service';
 import {
@@ -68,8 +72,8 @@ export class CatalogService {
       throw new ServiceUnavailableException('Catalog data is unavailable.');
     }
     const [categories, genres] = await Promise.all([
-      this.prisma.category.findMany({ orderBy: { name: 'asc' } }),
-      this.prisma.genre.findMany({ orderBy: { name: 'asc' } }),
+      this.prisma.category.findMany(),
+      this.prisma.genre.findMany(),
     ]);
     return {
       data: snapshot.items.map(({ anime }) => serializeAnime(anime)),
@@ -79,8 +83,8 @@ export class CatalogService {
         totalPages: snapshot.totalPages ?? 0,
         totalRecords: snapshot.totalRecords ?? 0,
         capped: isCatalogCapped(snapshot.totalRecords),
-        categories: categories.map(serializeCategory),
-        genres: genres.map(serializeCategory),
+        categories: sortByName(categories.map(serializeCategory)),
+        genres: sortByName(genres.map(serializeCategory)),
         years: [
           snapshot.minYear ?? 1990,
           snapshot.maxYear ?? new Date().getFullYear(),
