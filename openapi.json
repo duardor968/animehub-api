@@ -304,6 +304,7 @@
     },
     "/api/v1/catalog": {
       "get": {
+        "description": "La fuente sirve páginas de 20 y como máximo 1000 resultados (50 páginas) por consulta. Cuando una consulta coincide con más títulos, la fuente trunca el conjunto: meta.totalRecords se queda en 1000, las páginas posteriores a la 50 llegan vacías y meta.capped es true. Para alcanzar el resto hay que acotar la consulta (inicial, años, género, formato o estado).",
         "operationId": "CatalogController_getCatalog",
         "parameters": [
           {
@@ -1433,10 +1434,16 @@
             "type": "number"
           },
           "totalPages": {
-            "type": "number"
+            "type": "number",
+            "description": "Pages reported by the source; never more than 50."
           },
           "totalRecords": {
-            "type": "number"
+            "type": "number",
+            "description": "Records reported by the source; clamped at 1000 (see capped)."
+          },
+          "capped": {
+            "type": "boolean",
+            "description": "true when the source truncated the result set at its maximum of 1000 records / 50 pages: more titles match than totalRecords and pages beyond 50 are empty, so narrow the query (e.g. letter, year or genre filters) to reach them. totalRecords is then a lower bound (\"1000+\")."
           },
           "categories": {
             "type": "array",
@@ -1467,6 +1474,7 @@
           "perPage",
           "totalPages",
           "totalRecords",
+          "capped",
           "categories",
           "genres",
           "years"

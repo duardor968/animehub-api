@@ -6,6 +6,7 @@ import {
   AnimeAv1Service,
   AnimeAv1UnavailableError,
 } from './animeav1.service';
+import { isCatalogCapped } from './animeav1.constants';
 
 function routeResponse(data: unknown) {
   return new Response(
@@ -272,5 +273,14 @@ describe('AnimeAv1Service route errors', () => {
     await expect(service.getAnime('one-piece')).rejects.toBeInstanceOf(
       AnimeAv1UnavailableError,
     );
+  });
+});
+
+describe('catalog cap', () => {
+  it('flags result sets the source clamped at 1000 records', () => {
+    expect(isCatalogCapped(1_000)).toBe(true);
+    expect(isCatalogCapped(731)).toBe(false);
+    expect(isCatalogCapped(0)).toBe(false);
+    expect(isCatalogCapped(null)).toBe(false);
   });
 });
