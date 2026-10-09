@@ -65,4 +65,50 @@ describe('generated OpenAPI contract', () => {
       document.paths['/api/v1/health/ready']?.get?.responses?.[200],
     ).toBeDefined();
   });
+
+  it('documents the UI support additions', () => {
+    const schemas = document.components?.schemas ?? {};
+    const schema = (name: string) =>
+      schemas[name] as { required?: string[]; properties?: object };
+    expect(schema('CatalogMetaDto').required).toContain('capped');
+    expect(schema('EpisodePageMetaDto').required).toEqual(
+      expect.arrayContaining(['firstNumber', 'lastNumber']),
+    );
+    expect(schema('DownloadJobReceiptDto').required).toContain(
+      'missingEpisodeNumbers',
+    );
+    expect(
+      document.paths['/api/v1/anime/{slug}/download-jobs']?.post?.requestBody,
+    ).toMatchObject({
+      content: {
+        'application/json': {
+          schema: {
+            discriminator: {
+              propertyName: 'scope',
+              mapping: {
+                ALL: '#/components/schemas/AllDownloadJobRequestDto',
+                RANGE: '#/components/schemas/RangeDownloadJobRequestDto',
+                EPISODES: '#/components/schemas/EpisodesDownloadJobRequestDto',
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(schema('RangeDownloadJobRequestDto').required).toEqual(
+      expect.arrayContaining(['from', 'to']),
+    );
+    expect(schema('EpisodesDownloadJobRequestDto').required).toContain(
+      'episodeNumbers',
+    );
+    expect(
+      document.paths['/api/v1/sitemap/anime']?.get?.responses?.[200],
+    ).toMatchObject({
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/SitemapAnimeResponseDto' },
+        },
+      },
+    });
+  });
 });
