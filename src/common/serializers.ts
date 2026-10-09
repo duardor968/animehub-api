@@ -63,6 +63,24 @@ export function serializeCategory(category: CategoryRecord): CategoryDto {
   return { id: category.sourceId, name: category.name, slug: category.slug };
 }
 
+const spanishCollator = new Intl.Collator('es', { sensitivity: 'base' });
+
+// Genre/category names carry Spanish accents ("Acción", "Ciencia Ficción"), so
+// order them with Spanish collation rather than the database's byte order.
+export function sortByName<T extends { name: string }>(items: T[]): T[] {
+  return [...items].sort(
+    (a, b) =>
+      spanishCollator.compare(a.name, b.name) ||
+      (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+  );
+}
+
+function serializeGenres(genres: GenreRecord[] | undefined): CategoryDto[] {
+  return sortByName(
+    (genres ?? []).map(({ genre }) => serializeCategory(genre)),
+  );
+}
+
 export function serializeAnime(anime: AnimeRecord): AnimeSummaryDto {
   return {
     id: anime.sourceId,
@@ -81,7 +99,7 @@ export function serializeAnime(anime: AnimeRecord): AnimeSummaryDto {
 export function serializeFeatured(anime: AnimeRecord): FeaturedAnimeDto {
   return {
     ...serializeAnime(anime),
-    genres: (anime.genres ?? []).map(({ genre }) => serializeCategory(genre)),
+    genres: serializeGenres(anime.genres),
     episodeCount: anime.episodeCount ?? null,
     trailerUrl: anime.trailerUrl ?? null,
   };
@@ -108,7 +126,7 @@ export function serializeDetail(anime: AnimeRecord): AnimeDetailDto {
     score: anime.score ?? null,
     votes: anime.votes ?? null,
     sourceUrl: anime.sourceUrl ?? `https://animeav1.com/media/${anime.slug}`,
-    genres: (anime.genres ?? []).map(({ genre }) => serializeCategory(genre)),
+    genres: serializeGenres(anime.genres),
     relations: (anime.outgoingRelations ?? []).map(serializeRelation),
   };
 }
