@@ -31,15 +31,21 @@ export interface SourceEpisode {
   publishedAt: Date | null;
 }
 
+export const RELATION_KINDS = [
+  'PREQUEL',
+  'SEQUEL',
+  'MAIN_STORY',
+  'FULL_STORY',
+  'SIDE_STORY',
+  'SPIN_OFF',
+  'SUMMARY',
+  'ALTERNATIVE',
+  'ALTERNATIVE_SETTING',
+  'OTHER',
+] as const;
+
 export interface SourceRelation {
-  kind:
-    | 'PREQUEL'
-    | 'SEQUEL'
-    | 'MAIN_STORY'
-    | 'SIDE_STORY'
-    | 'SUMMARY'
-    | 'ALTERNATIVE'
-    | 'OTHER';
+  kind: (typeof RELATION_KINDS)[number];
   anime: SourceAnimeSummary;
 }
 

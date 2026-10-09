@@ -1276,11 +1276,15 @@
               "PREQUEL",
               "SEQUEL",
               "MAIN_STORY",
+              "FULL_STORY",
               "SIDE_STORY",
+              "SPIN_OFF",
               "SUMMARY",
               "ALTERNATIVE",
+              "ALTERNATIVE_SETTING",
               "OTHER"
-            ]
+            ],
+            "description": "Source relation label: PREQUEL Precuela, SEQUEL Secuela, MAIN_STORY Historia principal, FULL_STORY Historia completa, SIDE_STORY Historia paralela, SPIN_OFF Spin-off, SUMMARY Resumen, ALTERNATIVE Versión alternativa, ALTERNATIVE_SETTING Ambientación alternativa, OTHER Otro (the source itself gives no specific relation)."
           },
           "anime": {
             "$ref": "#/components/schemas/AnimeSummaryDto"

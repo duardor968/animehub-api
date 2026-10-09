@@ -211,7 +211,7 @@ describe('AnimeAv1Service bounded home source', () => {
   });
 });
 
-describe('AnimeAv1Service route errors', () => {
+describe('AnimeAv1Service route errors and relations', () => {
   const service = new AnimeAv1Service(
     new ConfigService({ ANIMEAV1_BASE_URL: 'https://source.test' }),
   );
@@ -273,6 +273,44 @@ describe('AnimeAv1Service route errors', () => {
     await expect(service.getAnime('one-piece')).rejects.toBeInstanceOf(
       AnimeAv1UnavailableError,
     );
+  });
+
+  it('keeps every source relation code distinct', async () => {
+    const destination = (id: number) => ({
+      id,
+      slug: `related-${id}`,
+      title: `Related ${id}`,
+    });
+    vi.spyOn(global, 'fetch').mockResolvedValue(
+      routeResponse({
+        media: {
+          id: 1,
+          slug: 'one-piece',
+          title: 'One Piece',
+          episodes: [],
+          relations: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 42].map((type) => ({
+            type,
+            destination: destination(type),
+          })),
+        },
+      }),
+    );
+
+    const detail = await service.getAnime('one-piece');
+
+    expect(detail.relations.map((relation) => relation.kind)).toEqual([
+      'PREQUEL',
+      'SEQUEL',
+      'ALTERNATIVE_SETTING',
+      'ALTERNATIVE',
+      'SIDE_STORY',
+      'SUMMARY',
+      'FULL_STORY',
+      'MAIN_STORY',
+      'SPIN_OFF',
+      'OTHER',
+      'OTHER',
+    ]);
   });
 });
 

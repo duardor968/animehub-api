@@ -3,6 +3,7 @@ import {
   ANIMEAV1_CATALOG_MAX_PAGES,
   ANIMEAV1_CATALOG_MAX_RECORDS,
 } from '../source/animeav1.constants';
+import { RELATION_KINDS } from '../source/source.types';
 
 export class CategoryDto {
   @ApiProperty() id!: string;
@@ -106,15 +107,9 @@ export class SuggestionResponseDto {
 
 export class RelationDto {
   @ApiProperty({
-    enum: [
-      'PREQUEL',
-      'SEQUEL',
-      'MAIN_STORY',
-      'SIDE_STORY',
-      'SUMMARY',
-      'ALTERNATIVE',
-      'OTHER',
-    ],
+    enum: RELATION_KINDS,
+    description:
+      'Source relation label: PREQUEL Precuela, SEQUEL Secuela, MAIN_STORY Historia principal, FULL_STORY Historia completa, SIDE_STORY Historia paralela, SPIN_OFF Spin-off, SUMMARY Resumen, ALTERNATIVE Versión alternativa, ALTERNATIVE_SETTING Ambientación alternativa, OTHER Otro (the source itself gives no specific relation).',
   })
   kind!: string;
   @ApiProperty({ type: AnimeSummaryDto }) anime!: AnimeSummaryDto;
