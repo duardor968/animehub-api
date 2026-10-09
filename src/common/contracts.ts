@@ -145,6 +145,20 @@ export class EpisodePageMetaDto {
   @ApiProperty() perPage!: number;
   @ApiProperty() totalPages!: number;
   @ApiProperty() totalRecords!: number;
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description:
+      'Lowest episode number across ALL episodes of the anime (not only this page); null when it has none. Movies are often a single episode 0.',
+  })
+  firstNumber!: number | null;
+  @ApiProperty({
+    type: Number,
+    nullable: true,
+    description:
+      'Highest episode number across ALL episodes of the anime (not only this page); null when it has none.',
+  })
+  lastNumber!: number | null;
 }
 
 export class EpisodePageResponseDto {
