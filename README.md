@@ -21,11 +21,11 @@ Los trabajos de descarga resuelven enlaces. La transferencia de archivos la real
 
 ## Arranque local
 
-Necesitas Node.js 24, pnpm 11.20.0 y una base PostgreSQL de desarrollo. CI usa PostgreSQL 18. Ejecuta los comandos desde la raíz de este repositorio.
+Necesitas Node.js 24, pnpm 12.10.1 y una base PostgreSQL de desarrollo. CI usa PostgreSQL 18. Ejecuta los comandos desde la raíz de este repositorio.
 
 ```sh
 corepack enable
-corepack prepare pnpm@11.20.0 --activate
+corepack prepare pnpm@12.10.1 --activate
 pnpm install --frozen-lockfile
 ```
 

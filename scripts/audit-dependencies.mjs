@@ -77,21 +77,30 @@ export function assessAudits(production, all) {
   };
 }
 
+export function auditCommand(pnpm, production, node = process.execPath) {
+  const args = [
+    'audit',
+    ...(production ? ['--prod'] : []),
+    '--audit-level',
+    'high',
+    '--json',
+  ];
+  // pnpm 12 runs as a native executable; older releases expose a JS entry
+  // point that has to be started with the current Node.js binary.
+  return /\.[cm]?js$/i.test(pnpm)
+    ? { command: node, args: [pnpm, ...args] }
+    : { command: pnpm, args };
+}
+
 function runAudit(production) {
   const pnpm = process.env.npm_execpath;
   if (!pnpm) throw new Error('Run this check with pnpm audit:ci.');
-  return spawnSync(
-    process.execPath,
-    [
-      pnpm,
-      'audit',
-      ...(production ? ['--prod'] : []),
-      '--audit-level',
-      'high',
-      '--json',
-    ],
-    { encoding: 'utf8', timeout: 90_000, maxBuffer: 20 * 1024 * 1024 },
-  );
+  const { command, args } = auditCommand(pnpm, production);
+  return spawnSync(command, args, {
+    encoding: 'utf8',
+    timeout: 90_000,
+    maxBuffer: 20 * 1024 * 1024,
+  });
 }
 
 const safeLine = (value) => String(value).replace(/[\r\n\x00-\x1f]/g, ' ');

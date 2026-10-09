@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { assessAudits, parseAudit } from './audit-dependencies.mjs';
+import {
+  assessAudits,
+  auditCommand,
+  parseAudit,
+} from './audit-dependencies.mjs';
 
 const advisory = (severity = 'high', id = 'GHSA-dev-only-test') => ({
   severity,
@@ -96,4 +100,15 @@ test('registry, process and malformed-result failures cannot become informationa
 test('pre-existing configured exclusions are disclosed instead of called zero findings', () => {
   const report = parseAudit(result({}, 0, { high: 1 }), 'production');
   assert.equal(report.configuredExclusions, 1);
+});
+
+test('the audit runs pnpm natively or through Node.js depending on its entry point', () => {
+  assert.deepEqual(auditCommand('/pnpm/12/pnpm-native', true, '/node'), {
+    command: '/pnpm/12/pnpm-native',
+    args: ['audit', '--prod', '--audit-level', 'high', '--json'],
+  });
+  assert.deepEqual(auditCommand('/pnpm/11/bin/pnpm.mjs', false, '/node'), {
+    command: '/node',
+    args: ['/pnpm/11/bin/pnpm.mjs', 'audit', '--audit-level', 'high', '--json'],
+  });
 });
