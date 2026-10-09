@@ -672,6 +672,7 @@
     },
     "/api/v1/anime/{slug}/download-jobs": {
       "post": {
+        "description": "scope ALL resuelve todos los episodios; RANGE, los episodios con número entre from y to (ambos obligatorios, from ≤ to); EPISODES, exactamente los números de episodeNumbers (los que el anime no tiene se omiten y se devuelven en missingEpisodeNumbers). Responde 400 si ningún episodio coincide.",
         "operationId": "DownloadJobsController_create",
         "parameters": [
           {
@@ -688,7 +689,25 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateDownloadJobDto"
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/AllDownloadJobRequestDto"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RangeDownloadJobRequestDto"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EpisodesDownloadJobRequestDto"
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "scope",
+                  "mapping": {
+                    "ALL": "#/components/schemas/AllDownloadJobRequestDto",
+                    "RANGE": "#/components/schemas/RangeDownloadJobRequestDto",
+                    "EPISODES": "#/components/schemas/EpisodesDownloadJobRequestDto"
+                  }
+                }
               }
             }
           }
@@ -755,7 +774,7 @@
             }
           }
         },
-        "summary": "Crea un trabajo durable para una serie o rango",
+        "summary": "Crea un trabajo durable para una serie, un rango o una selección",
         "tags": ["download jobs"]
       }
     },
@@ -1652,32 +1671,94 @@
         },
         "required": ["data"]
       },
-      "CreateDownloadJobDto": {
+      "AllDownloadJobRequestDto": {
         "type": "object",
         "properties": {
-          "scope": {
-            "type": "string",
-            "enum": ["ALL", "RANGE"]
-          },
           "audio": {
             "type": "string",
             "enum": ["SUB", "DUB"]
           },
           "providers": {
             "type": "array",
+            "minItems": 1,
             "items": {
               "type": "string",
               "enum": ["MEGA", "PIXELDRAIN", "MP4UPLOAD", "ONE_FICHIER"]
             }
           },
-          "from": {
-            "type": "number"
-          },
-          "to": {
-            "type": "number"
+          "scope": {
+            "type": "string",
+            "enum": ["ALL"],
+            "description": "Every episode of the anime."
           }
         },
-        "required": ["scope", "audio", "providers"]
+        "required": ["audio", "providers", "scope"]
+      },
+      "RangeDownloadJobRequestDto": {
+        "type": "object",
+        "properties": {
+          "audio": {
+            "type": "string",
+            "enum": ["SUB", "DUB"]
+          },
+          "providers": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": ["MEGA", "PIXELDRAIN", "MP4UPLOAD", "ONE_FICHIER"]
+            }
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["RANGE"],
+            "description": "Every existing episode whose number is within [from, to] (inclusive)."
+          },
+          "from": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Required; from <= to."
+          },
+          "to": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Required; to >= from."
+          }
+        },
+        "required": ["audio", "providers", "scope", "from", "to"]
+      },
+      "EpisodesDownloadJobRequestDto": {
+        "type": "object",
+        "properties": {
+          "audio": {
+            "type": "string",
+            "enum": ["SUB", "DUB"]
+          },
+          "providers": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": ["MEGA", "PIXELDRAIN", "MP4UPLOAD", "ONE_FICHIER"]
+            }
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["EPISODES"],
+            "description": "Exactly the listed episodes."
+          },
+          "episodeNumbers": {
+            "minItems": 1,
+            "maxItems": 5000,
+            "uniqueItems": true,
+            "description": "Episode numbers to resolve (finite, >= 0, decimals allowed, no duplicates). Numbers the anime does not have are skipped and listed in the receipt as missingEpisodeNumbers; if none exists the request fails with 400.",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": ["audio", "providers", "scope", "episodeNumbers"]
       },
       "DownloadJobReceiptDto": {
         "type": "object",
@@ -1690,9 +1771,21 @@
           },
           "expiresAt": {
             "type": "string"
+          },
+          "missingEpisodeNumbers": {
+            "description": "EPISODES scope only: requested numbers the anime does not have, which the job skips (ascending). Always empty for ALL and RANGE.",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
           }
         },
-        "required": ["jobId", "accessToken", "expiresAt"]
+        "required": [
+          "jobId",
+          "accessToken",
+          "expiresAt",
+          "missingEpisodeNumbers"
+        ]
       },
       "DownloadJobReceiptResponseDto": {
         "type": "object",

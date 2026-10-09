@@ -83,21 +83,10 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
     input: CreateDownloadJobDto,
   ): Promise<DownloadJobReceiptResponseDto> {
     const anime = await this.animeService.ensureAnime(slug);
-    const where =
-      input.scope === DownloadScopeDto.RANGE
-        ? {
-            animeId: anime.id,
-            number: {
-              gte: input.from ?? 0,
-              lte: input.to ?? Number.MAX_SAFE_INTEGER,
-            },
-          }
-        : { animeId: anime.id };
-    const episodes = await this.prisma.episode.findMany({
-      where,
-      orderBy: { number: 'asc' },
-      select: { id: true },
-    });
+    const { episodes, missingEpisodeNumbers } = await this.selectEpisodes(
+      anime.id,
+      input,
+    );
     if (episodes.length === 0) {
       throw new BadRequestException('No episodes match the requested scope.');
     }
@@ -127,8 +116,43 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
       void this.process(job.id);
     }
     return {
-      data: { jobId: job.id, accessToken, expiresAt: expiresAt.toISOString() },
+      data: {
+        jobId: job.id,
+        accessToken,
+        expiresAt: expiresAt.toISOString(),
+        missingEpisodeNumbers,
+      },
     };
+  }
+
+  private async selectEpisodes(animeId: string, input: CreateDownloadJobDto) {
+    if (input.scope === DownloadScopeDto.EPISODES) {
+      // Validation guarantees a non-empty, duplicate-free list; -0 → 0.
+      const requested = [
+        ...new Set((input.episodeNumbers ?? []).map((value) => value + 0)),
+      ].sort((a, b) => a - b);
+      const episodes = await this.prisma.episode.findMany({
+        where: { animeId, number: { in: requested } },
+        orderBy: { number: 'asc' },
+        select: { id: true, number: true },
+      });
+      const found = new Set(episodes.map((episode) => episode.number));
+      return {
+        episodes,
+        missingEpisodeNumbers: requested.filter((value) => !found.has(value)),
+      };
+    }
+    // RANGE always carries both bounds (validated, from <= to); ALL ignores
+    // any bounds older clients still send.
+    const episodes = await this.prisma.episode.findMany({
+      where:
+        input.scope === DownloadScopeDto.RANGE
+          ? { animeId, number: { gte: input.from, lte: input.to } }
+          : { animeId },
+      orderBy: { number: 'asc' },
+      select: { id: true, number: true },
+    });
+    return { episodes, missingEpisodeNumbers: [] as number[] };
   }
 
   async get(jobId: string, token: string): Promise<DownloadJobResponseDto> {

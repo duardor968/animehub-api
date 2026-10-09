@@ -10,14 +10,20 @@ import {
 import { RouteConfig } from '@nestjs/platform-fastify';
 import {
   ApiBearerAuth,
+  ApiBody,
+  ApiExtraModels,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  getSchemaPath,
 } from '@nestjs/swagger';
 import {
+  AllDownloadJobRequestDto,
   CreateDownloadJobDto,
   DownloadJobReceiptResponseDto,
   DownloadJobResponseDto,
+  EpisodesDownloadJobRequestDto,
+  RangeDownloadJobRequestDto,
 } from './download.dto';
 import { ApiProblemResponses } from '../common/openapi-problem-responses';
 import { DownloadJobsService } from './download-jobs.service';
@@ -29,7 +35,34 @@ export class DownloadJobsController {
 
   @Post('anime/:slug/download-jobs')
   @RouteConfig({ rateLimit: { max: 5, timeWindow: '1 minute' } })
-  @ApiOperation({ summary: 'Crea un trabajo durable para una serie o rango' })
+  @ApiOperation({
+    summary: 'Crea un trabajo durable para una serie, un rango o una selección',
+    description:
+      'scope ALL resuelve todos los episodios; RANGE, los episodios con número entre from y to (ambos obligatorios, from ≤ to); EPISODES, exactamente los números de episodeNumbers (los que el anime no tiene se omiten y se devuelven en missingEpisodeNumbers). Responde 400 si ningún episodio coincide.',
+  })
+  @ApiExtraModels(
+    AllDownloadJobRequestDto,
+    RangeDownloadJobRequestDto,
+    EpisodesDownloadJobRequestDto,
+  )
+  @ApiBody({
+    required: true,
+    schema: {
+      oneOf: [
+        { $ref: getSchemaPath(AllDownloadJobRequestDto) },
+        { $ref: getSchemaPath(RangeDownloadJobRequestDto) },
+        { $ref: getSchemaPath(EpisodesDownloadJobRequestDto) },
+      ],
+      discriminator: {
+        propertyName: 'scope',
+        mapping: {
+          ALL: getSchemaPath(AllDownloadJobRequestDto),
+          RANGE: getSchemaPath(RangeDownloadJobRequestDto),
+          EPISODES: getSchemaPath(EpisodesDownloadJobRequestDto),
+        },
+      },
+    },
+  })
   @ApiOkResponse({ type: DownloadJobReceiptResponseDto })
   @ApiProblemResponses(400, 404, 429, 500, 503)
   create(@Param('slug') slug: string, @Body() body: CreateDownloadJobDto) {
