@@ -48,20 +48,28 @@ Swagger queda en `http://localhost:8000/docs` y el contrato en `http://localhost
 
 ### Configuración
 
-| Variable               | Para qué sirve                                                                         |
-| ---------------------- | -------------------------------------------------------------------------------------- |
-| `DATABASE_URL`         | Conexión a PostgreSQL, incluida la persistencia de los trabajos.                       |
-| `PORT`                 | Puerto HTTP; por defecto, `8000`.                                                      |
-| `CORS_ORIGINS`         | Orígenes permitidos, separados por comas. En local: `http://localhost:3000`.           |
-| `ANIMEAV1_BASE_URL`    | Origen de la fuente; por defecto, `https://animeav1.com`.                              |
-| `SOURCE_USER_AGENT`    | Identificación de las solicitudes a la fuente.                                         |
-| `JOBS_ENABLED`         | Activa los trabajadores y refrescos programados. Déjalo en `true` para usar los lotes. |
-| `TRUST_PROXY`          | Proxies fiables para `X-Forwarded-For` (`true`, saltos o IP/CIDR); si falta, ninguno.  |
-| `RATE_LIMIT_MAX`       | Solicitudes por minuto y cliente; por defecto, `120`.                                  |
-| `RATE_LIMIT_ALLOWLIST` | IP exentas del límite, separadas por comas (p. ej. la del servidor de la Web).         |
-| `LOG_LEVEL`            | Nivel de los logs; por defecto, `info`.                                                |
+| Variable            | Para qué sirve                                                                         |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| `DATABASE_URL`      | Conexión a PostgreSQL, incluida la persistencia de los trabajos.                       |
+| `PORT`              | Puerto HTTP; por defecto, `8000`.                                                      |
+| `CORS_ORIGINS`      | Orígenes permitidos, separados por comas. En local: `http://localhost:3000`.           |
+| `ANIMEAV1_BASE_URL` | Origen de la fuente; por defecto, `https://animeav1.com`.                              |
+| `SOURCE_USER_AGENT` | Identificación de las solicitudes a la fuente.                                         |
+| `JOBS_ENABLED`      | Activa los trabajadores y refrescos programados. Déjalo en `true` para usar los lotes. |
+| `TRUST_PROXY`       | Proxies fiables para `X-Forwarded-For` (`true`, saltos o IP/CIDR); si falta, ninguno.  |
+| `RATE_LIMIT_MAX`    | Solicitudes por minuto y cliente; por defecto, `120`.                                  |
+| `LOG_LEVEL`         | Nivel de los logs; por defecto, `info`.                                                |
 
 Mantén `.env` fuera de Git. La Web no necesita conocer `DATABASE_URL`.
+
+### Límite de solicitudes y SSR
+
+El límite se cuenta por IP de cliente. Las páginas que la Web renderiza en el servidor (SSR) llegan desde la IP del servidor de la Web, así que, para atribuirlas a cada visitante:
+
+- La Web envía la IP del visitante en `X-Forwarded-For` en sus solicitudes del lado del servidor.
+- `TRUST_PROXY` debe nombrar todos los proxies que hay delante de la API, incluido el servidor de la Web; por ejemplo, `TRUST_PROXY=10.0.0.5,10.0.0.10` para la Web y un proxy inverso. Si navegadores y SSR llegan con distinto número de saltos, usa direcciones en lugar de un número de saltos.
+
+Sin `TRUST_PROXY`, la API ignora `X-Forwarded-For` y todo el SSR comparte el cupo de la IP de la Web. Confía solo en proxies que controlas y que fijan la cabecera: un salto de confianza que reenvía el `X-Forwarded-For` del cliente sin revisarlo le permite inventarse la IP y esquivar el límite. No hay lista de IP exentas a propósito: eximir a la Web eximiría también las consultas a AnimeAV1 que provoca cada visitante.
 
 ## Contrato de la API
 

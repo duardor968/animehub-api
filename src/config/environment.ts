@@ -16,9 +16,6 @@ const environmentSchema = z.object({
   // Read directly by createFastifyAdapter (before Nest config exists).
   TRUST_PROXY: z.string().optional(),
   RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(120),
-  // Comma-separated client IPs exempt from the rate limit, e.g. the web
-  // server, whose server-side rendering otherwise shares a single bucket.
-  RATE_LIMIT_ALLOWLIST: z.string().optional(),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
