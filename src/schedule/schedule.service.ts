@@ -15,6 +15,16 @@ import { SourceEpisode } from '../source/source.types';
 export const SCHEDULE_RETENTION_MS = 6 * 60 * 60_000;
 // The API is timezone-neutral. Clients keep finales only on their local date.
 const FINALE_WINDOW_MS = 48 * 60 * 60_000;
+// AnimeAV1 keeps listing series on /horario long after their weekly cadence
+// stops (seasonal breaks, theatrical-chapter releases such as Yamato 3199 last
+// published 11 months earlier). After three missed weekly slots an entry no
+// longer describes a weekly airing, so it is left out instead of reading as
+// "delayed" forever. A new publication brings it back automatically.
+export const SCHEDULE_STALE_AFTER_MS = 21 * 24 * 60 * 60_000;
+
+export function isStaleScheduleEntry(publishedAt: Date, now: Date) {
+  return now.getTime() - publishedAt.getTime() > SCHEDULE_STALE_AFTER_MS;
+}
 
 export interface RetainableScheduleItem {
   animeId: string;
@@ -97,9 +107,10 @@ export class ScheduleService {
     // An empty, successfully fetched week is valid between seasons.
     if (!snapshot)
       throw new ServiceUnavailableException('Schedule is unavailable.');
+    const now = new Date();
     return {
       data: snapshot.items.flatMap(({ anime, episode }) =>
-        episode?.publishedAt
+        episode?.publishedAt && !isStaleScheduleEntry(episode.publishedAt, now)
           ? [
               {
                 anime: serializeAnime(anime),
@@ -113,7 +124,7 @@ export class ScheduleService {
       meta: {
         fetchedAt: snapshot.fetchedAt.toISOString(),
         nextRefreshAt: snapshot.nextRefreshAt.toISOString(),
-        stale: snapshot.nextRefreshAt <= new Date(),
+        stale: snapshot.nextRefreshAt <= now,
       },
     };
   }
