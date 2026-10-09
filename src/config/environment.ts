@@ -11,10 +11,14 @@ const environmentSchema = z.object({
   SOURCE_USER_AGENT: z
     .string()
     .min(10)
-    .default('AnimeHub/1.0 (+https://github.com/duardor968/animehub-web)'),
+    .default('AnimeHub/1.0 (+https://github.com/duardor968/animehub-api)'),
   JOBS_ENABLED: z.enum(['true', 'false']).default('true'),
   // Read directly by createFastifyAdapter (before Nest config exists).
   TRUST_PROXY: z.string().optional(),
+  RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(120),
+  // Comma-separated client IPs exempt from the rate limit, e.g. the web
+  // server, whose server-side rendering otherwise shares a single bucket.
+  RATE_LIMIT_ALLOWLIST: z.string().optional(),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),

@@ -48,16 +48,18 @@ Swagger queda en `http://localhost:8000/docs` y el contrato en `http://localhost
 
 ### Configuración
 
-| Variable            | Para qué sirve                                                                         |
-| ------------------- | -------------------------------------------------------------------------------------- |
-| `DATABASE_URL`      | Conexión a PostgreSQL, incluida la persistencia de los trabajos.                       |
-| `PORT`              | Puerto HTTP; por defecto, `8000`.                                                      |
-| `CORS_ORIGINS`      | Orígenes permitidos, separados por comas. En local: `http://localhost:3000`.           |
-| `ANIMEAV1_BASE_URL` | Origen de la fuente; por defecto, `https://animeav1.com`.                              |
-| `SOURCE_USER_AGENT` | Identificación de las solicitudes a la fuente.                                         |
-| `JOBS_ENABLED`      | Activa los trabajadores y refrescos programados. Déjalo en `true` para usar los lotes. |
-| `TRUST_PROXY`       | Proxies fiables para `X-Forwarded-For` (`true`, saltos o IP/CIDR); si falta, ninguno.  |
-| `LOG_LEVEL`         | Nivel de los logs; por defecto, `info`.                                                |
+| Variable               | Para qué sirve                                                                         |
+| ---------------------- | -------------------------------------------------------------------------------------- |
+| `DATABASE_URL`         | Conexión a PostgreSQL, incluida la persistencia de los trabajos.                       |
+| `PORT`                 | Puerto HTTP; por defecto, `8000`.                                                      |
+| `CORS_ORIGINS`         | Orígenes permitidos, separados por comas. En local: `http://localhost:3000`.           |
+| `ANIMEAV1_BASE_URL`    | Origen de la fuente; por defecto, `https://animeav1.com`.                              |
+| `SOURCE_USER_AGENT`    | Identificación de las solicitudes a la fuente.                                         |
+| `JOBS_ENABLED`         | Activa los trabajadores y refrescos programados. Déjalo en `true` para usar los lotes. |
+| `TRUST_PROXY`          | Proxies fiables para `X-Forwarded-For` (`true`, saltos o IP/CIDR); si falta, ninguno.  |
+| `RATE_LIMIT_MAX`       | Solicitudes por minuto y cliente; por defecto, `120`.                                  |
+| `RATE_LIMIT_ALLOWLIST` | IP exentas del límite, separadas por comas (p. ej. la del servidor de la Web).         |
+| `LOG_LEVEL`            | Nivel de los logs; por defecto, `info`.                                                |
 
 Mantén `.env` fuera de Git. La Web no necesita conocer `DATABASE_URL`.
 

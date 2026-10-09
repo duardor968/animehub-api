@@ -165,7 +165,7 @@ export class AnimeAv1Service {
       .replace(/\/$/, '');
     this.userAgent = config.get<string>(
       'SOURCE_USER_AGENT',
-      'AnimeHub/1.0 (+https://github.com/duardor968/animehub-web)',
+      'AnimeHub/1.0 (+https://github.com/duardor968/animehub-api)',
     );
   }
 

@@ -149,3 +149,47 @@ describe('HTTP error mapping through Nest + Fastify', () => {
     expect(other.headers['cache-control']).toBe(API_CACHE_CONTROL);
   });
 });
+
+describe('rate limit allow list', () => {
+  let app: NestFastifyApplication;
+
+  beforeAll(async () => {
+    vi.stubEnv('RATE_LIMIT_ALLOWLIST', ' 10.0.0.5 , 127.0.0.1');
+    app = await NestFactory.create<NestFastifyApplication>(
+      ProbeModule,
+      createFastifyAdapter(),
+      { logger: false },
+    );
+    await configureApp(app);
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+  });
+
+  afterAll(async () => {
+    vi.unstubAllEnvs();
+    await app.close();
+  });
+
+  it('exempts listed addresses such as the web server', async () => {
+    const statuses = [];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const response = await app.inject({
+        url: '/api/v1/probe/limited',
+        remoteAddress: '127.0.0.1',
+      });
+      statuses.push(response.statusCode);
+    }
+    const other = await app.inject({
+      url: '/api/v1/probe/limited',
+      remoteAddress: '203.0.113.9',
+    });
+    const otherAgain = await app.inject({
+      url: '/api/v1/probe/limited',
+      remoteAddress: '203.0.113.9',
+    });
+
+    expect(statuses).toEqual([200, 200, 200]);
+    expect(other.statusCode).toBe(200);
+    expect(otherAgain.statusCode).toBe(429);
+  });
+});
