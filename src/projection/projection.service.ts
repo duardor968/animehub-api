@@ -136,9 +136,11 @@ export class ProjectionService {
       where: { id: anime.id },
       select: { contentHash: true, unchangedRefreshes: true },
     });
+    const contentChanged = previous.contentHash !== contentHash;
     await this.prisma.anime.update({
       where: { id: anime.id },
       data: {
+        ...(contentChanged ? { contentUpdatedAt: now } : {}),
         alternativeTitle: source.alternativeTitle,
         trailerUrl: source.trailerUrl,
         endDate: source.endDate,
@@ -148,17 +150,14 @@ export class ProjectionService {
         votes: source.votes,
         contentHash,
         detailFetchedAt: now,
-        unchangedRefreshes:
-          previous.contentHash === contentHash
-            ? previous.unchangedRefreshes + 1
-            : 0,
+        unchangedRefreshes: contentChanged
+          ? 0
+          : previous.unchangedRefreshes + 1,
         lastFetchedAt: now,
         nextRefreshAt: nextAnimeRefresh(
           source.status,
           now,
-          previous.contentHash === contentHash
-            ? previous.unchangedRefreshes + 1
-            : 0,
+          contentChanged ? 0 : previous.unchangedRefreshes + 1,
         ),
       },
     });

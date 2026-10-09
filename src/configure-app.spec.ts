@@ -2,12 +2,18 @@ import { Body, Controller, Get, Module, Post } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { NestFastifyApplication, RouteConfig } from '@nestjs/platform-fastify';
+import { API_CACHE_CONTROL } from './common/no-store.interceptor';
 import { configureApp } from './configure-app';
 import { createFastifyAdapter } from './fastify-adapter';
 import {
   AnimeAv1NotFoundError,
   AnimeAv1UnavailableError,
 } from './source/animeav1.service';
+import {
+  SITEMAP_CACHE_CONTROL,
+  SitemapController,
+} from './sitemap/sitemap.controller';
+import { SitemapService } from './sitemap/sitemap.service';
 
 @Controller('probe')
 class ProbeController {
@@ -40,7 +46,20 @@ class ProbeController {
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true })],
-  controllers: [ProbeController],
+  controllers: [ProbeController, SitemapController],
+  providers: [
+    {
+      provide: SitemapService,
+      useValue: {
+        getAnime: () =>
+          Promise.resolve({
+            data: [
+              { slug: 'one-piece', updatedAt: '2026-10-01T00:00:00.000Z' },
+            ],
+          }),
+      },
+    },
+  ],
 })
 class ProbeModule {}
 
@@ -112,5 +131,21 @@ describe('HTTP error mapping through Nest + Fastify', () => {
     expect(response.headers['content-type']).toContain(
       'application/problem+json',
     );
+  });
+
+  it('lets the sitemap listing be cached while other routes stay no-store', async () => {
+    const sitemap = await app.inject({ url: '/api/v1/sitemap/anime' });
+    const other = await app.inject({
+      method: 'POST',
+      url: '/api/v1/probe/echo',
+      payload: {},
+    });
+
+    expect(sitemap.statusCode).toBe(200);
+    expect(sitemap.headers['cache-control']).toBe(SITEMAP_CACHE_CONTROL);
+    expect(sitemap.json()).toEqual({
+      data: [{ slug: 'one-piece', updatedAt: '2026-10-01T00:00:00.000Z' }],
+    });
+    expect(other.headers['cache-control']).toBe(API_CACHE_CONTROL);
   });
 });

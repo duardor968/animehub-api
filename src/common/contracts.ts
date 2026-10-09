@@ -194,6 +194,20 @@ export class ScheduleResponseDto {
   @ApiProperty({ type: FreshnessDto }) meta!: FreshnessDto;
 }
 
+export class SitemapAnimeDto {
+  @ApiProperty() slug!: string;
+  @ApiProperty({
+    format: 'date-time',
+    description:
+      'Last known change of the anime page content: the newer of its last detected detail change (title, synopsis, episode list, relations) and its latest episode publication.',
+  })
+  updatedAt!: string;
+}
+
+export class SitemapAnimeResponseDto {
+  @ApiProperty({ type: [SitemapAnimeDto] }) data!: SitemapAnimeDto[];
+}
+
 export class ProblemDetailsDto {
   @ApiProperty() type!: string;
   @ApiProperty() title!: string;
