@@ -87,7 +87,11 @@ export class DownloadJobsController {
   @Post('download-jobs/:id/retry')
   @RouteConfig({ rateLimit: { max: 10, timeWindow: '1 minute' } })
   @ApiBearerAuth('jobCapability')
-  @ApiOperation({ summary: 'Reintenta únicamente episodios fallidos' })
+  @ApiOperation({
+    summary: 'Reintenta únicamente episodios fallidos',
+    description:
+      'Solo para trabajos terminados en PARTIAL o FAILED. Responde 400 si el trabajo sigue en curso, fue cancelado o no tiene episodios fallidos.',
+  })
   @ApiOkResponse({ type: DownloadJobResponseDto })
   @ApiProblemResponses(400, 401, 429, 500)
   retry(
@@ -100,7 +104,11 @@ export class DownloadJobsController {
   @Post('download-jobs/:id/cancel')
   @RouteConfig({ rateLimit: { max: 20, timeWindow: '1 minute' } })
   @ApiBearerAuth('jobCapability')
-  @ApiOperation({ summary: 'Cancela los ítems pendientes del trabajo' })
+  @ApiOperation({
+    summary: 'Cancela los ítems pendientes del trabajo',
+    description:
+      'Un trabajo QUEUED o RUNNING pasa a CANCELLED junto con los episodios aún sin resolver; los ya resueltos se conservan. Si el trabajo ya había terminado (COMPLETED, PARTIAL o FAILED), no se modifica y se devuelve su estado final: comprueba status para saber si la cancelación llegó a tiempo. Repetirla sobre un trabajo cancelado no cambia nada.',
+  })
   @ApiOkResponse({ type: DownloadJobResponseDto })
   @ApiProblemResponses(401, 429, 500)
   cancel(

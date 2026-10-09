@@ -30,6 +30,19 @@ import { DownloadResolverService } from './download-resolver.service';
 
 const QUEUE_NAME = 'animehub-download-job';
 
+const ACTIVE_JOB_STATUSES: DownloadJobStatus[] = [
+  DownloadJobStatus.QUEUED,
+  DownloadJobStatus.RUNNING,
+];
+const RETRYABLE_JOB_STATUSES: DownloadJobStatus[] = [
+  DownloadJobStatus.PARTIAL,
+  DownloadJobStatus.FAILED,
+];
+const UNFINISHED_ITEM_STATUSES: DownloadJobItemStatus[] = [
+  DownloadJobItemStatus.PENDING,
+  DownloadJobItemStatus.RUNNING,
+];
+
 export function hashCapabilityToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
 }
@@ -160,40 +173,61 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
     return { data: this.serialize(job) };
   }
 
+  /**
+   * Cancels a job that is still QUEUED or RUNNING: the job and its unfinished
+   * items become CANCELLED in one transaction. A job that already finished
+   * (COMPLETED, PARTIAL or FAILED) is left untouched and returned as is, so the
+   * caller can tell from `status` that the cancellation came too late.
+   */
   async cancel(jobId: string, token: string): Promise<DownloadJobResponseDto> {
     await this.authorize(jobId, token);
-    await this.prisma.$transaction([
-      this.prisma.downloadJob.update({
-        where: { id: jobId },
+    await this.prisma.$transaction(async (transaction) => {
+      const cancelled = await transaction.downloadJob.updateMany({
+        where: { id: jobId, status: { in: ACTIVE_JOB_STATUSES } },
         data: { status: DownloadJobStatus.CANCELLED, completedAt: new Date() },
-      }),
-      this.prisma.downloadJobItem.updateMany({
-        where: { jobId, status: DownloadJobItemStatus.PENDING },
+      });
+      if (cancelled.count === 0) return;
+      // Items being resolved right now are cancelled too: process() only
+      // records a result over a RUNNING item, so the job stays as cancelled.
+      await transaction.downloadJobItem.updateMany({
+        where: { jobId, status: { in: UNFINISHED_ITEM_STATUSES } },
         data: { status: DownloadJobItemStatus.CANCELLED },
-      }),
-    ]);
+      });
+    });
     return this.get(jobId, token);
   }
 
+  /**
+   * Re-queues the failed items of a finished PARTIAL or FAILED job. A job that
+   * is still active, was cancelled or has no failures cannot be retried.
+   */
   async retry(jobId: string, token: string): Promise<DownloadJobResponseDto> {
     await this.authorize(jobId, token);
-    const result = await this.prisma.downloadJobItem.updateMany({
-      where: { jobId, status: DownloadJobItemStatus.FAILED },
-      data: {
-        status: DownloadJobItemStatus.PENDING,
-        errorCode: null,
-        links: Prisma.JsonNull,
-      },
-    });
-    if (result.count === 0)
-      throw new BadRequestException('The job has no failed episodes.');
-    await this.prisma.downloadJob.update({
-      where: { id: jobId },
-      data: {
-        status: DownloadJobStatus.QUEUED,
-        failedItems: 0,
-        completedAt: null,
-      },
+    await this.prisma.$transaction(async (transaction) => {
+      const requeued = await transaction.downloadJob.updateMany({
+        where: { id: jobId, status: { in: RETRYABLE_JOB_STATUSES } },
+        data: {
+          status: DownloadJobStatus.QUEUED,
+          failedItems: 0,
+          completedAt: null,
+        },
+      });
+      if (requeued.count === 0) {
+        throw new BadRequestException(
+          'Only a finished job with failed episodes can be retried.',
+        );
+      }
+      const reset = await transaction.downloadJobItem.updateMany({
+        where: { jobId, status: DownloadJobItemStatus.FAILED },
+        data: {
+          status: DownloadJobItemStatus.PENDING,
+          errorCode: null,
+          links: Prisma.JsonNull,
+        },
+      });
+      // Throwing rolls the job update back as well.
+      if (reset.count === 0)
+        throw new BadRequestException('The job has no failed episodes.');
     });
     if (this.boss) {
       await this.boss.send(QUEUE_NAME, { jobId }, { group: { id: 'bulk' } });
@@ -201,6 +235,8 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
     return this.get(jobId, token);
   }
 
+  // Every write below is guarded on the state it expects, so a concurrent
+  // cancel() always wins: process() never revives a CANCELLED job or item.
   private async process(jobId: string) {
     const job = await this.prisma.downloadJob.findUnique({
       where: { id: jobId },
@@ -213,13 +249,14 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
     ) {
       return;
     }
-    await this.prisma.downloadJob.update({
-      where: { id: jobId },
+    const started = await this.prisma.downloadJob.updateMany({
+      where: { id: jobId, status: { in: ACTIVE_JOB_STATUSES } },
       data: {
         status: DownloadJobStatus.RUNNING,
         startedAt: job.startedAt ?? new Date(),
       },
     });
+    if (started.count === 0) return;
     const pending = job.items.filter(
       (item) => item.status === DownloadJobItemStatus.PENDING,
     );
@@ -228,18 +265,17 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
       await Promise.all(
         block.map((item) =>
           this.episodeLimit(async () => {
-            const state = await this.prisma.downloadJob.findUnique({
-              where: { id: jobId },
-              select: { status: true },
-            });
-            if (state?.status === DownloadJobStatus.CANCELLED) return;
-            await this.prisma.downloadJobItem.update({
-              where: { id: item.id },
+            // cancel() turns PENDING items into CANCELLED in the same
+            // transaction as the job, so a cancelled item is never claimed.
+            const claimed = await this.prisma.downloadJobItem.updateMany({
+              where: { id: item.id, status: DownloadJobItemStatus.PENDING },
               data: {
                 status: DownloadJobItemStatus.RUNNING,
                 attempts: { increment: 1 },
               },
             });
+            if (claimed.count === 0) return;
+            let result: Prisma.DownloadJobItemUpdateManyMutationInput;
             try {
               const resolved = await this.resolver.resolveEpisode(
                 job.animeId,
@@ -248,26 +284,25 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
                 job.requestedAudio as RequestedAudioDto,
                 job.providers as ProviderDto[],
               );
-              await this.prisma.downloadJobItem.update({
-                where: { id: item.id },
-                data: {
-                  status: resolved.errorCode
-                    ? DownloadJobItemStatus.FAILED
-                    : DownloadJobItemStatus.COMPLETED,
-                  resolvedAudio: resolved.audio,
-                  links: resolved.links as unknown as Prisma.InputJsonValue,
-                  errorCode: resolved.errorCode,
-                },
-              });
+              result = {
+                status: resolved.errorCode
+                  ? DownloadJobItemStatus.FAILED
+                  : DownloadJobItemStatus.COMPLETED,
+                resolvedAudio: resolved.audio,
+                links: resolved.links as unknown as Prisma.InputJsonValue,
+                errorCode: resolved.errorCode,
+              };
             } catch {
-              await this.prisma.downloadJobItem.update({
-                where: { id: item.id },
-                data: {
-                  status: DownloadJobItemStatus.FAILED,
-                  errorCode: 'SOURCE_UNAVAILABLE',
-                },
-              });
+              result = {
+                status: DownloadJobItemStatus.FAILED,
+                errorCode: 'SOURCE_UNAVAILABLE',
+              };
             }
+            // A cancel() during the resolution already moved the item on.
+            await this.prisma.downloadJobItem.updateMany({
+              where: { id: item.id, status: DownloadJobItemStatus.RUNNING },
+              data: result,
+            });
           }),
         ),
       );
@@ -291,10 +326,18 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
           : completedItems > 0
             ? DownloadJobStatus.PARTIAL
             : DownloadJobStatus.FAILED;
-    await this.prisma.downloadJob.update({
-      where: { id: jobId },
+    const finished = await this.prisma.downloadJob.updateMany({
+      where: { id: jobId, status: DownloadJobStatus.RUNNING },
       data: { status, completedItems, failedItems, completedAt: new Date() },
     });
+    if (finished.count === 0) {
+      // Cancelled meanwhile: keep CANCELLED and its completedAt, but record
+      // the items that were resolved before the cancellation.
+      await this.prisma.downloadJob.updateMany({
+        where: { id: jobId, status: DownloadJobStatus.CANCELLED },
+        data: { completedItems, failedItems },
+      });
+    }
   }
 
   private async authorize(jobId: string, token: string) {

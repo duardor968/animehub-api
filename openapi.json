@@ -852,6 +852,7 @@
     },
     "/api/v1/download-jobs/{id}/retry": {
       "post": {
+        "description": "Solo para trabajos terminados en PARTIAL o FAILED. Responde 400 si el trabajo sigue en curso, fue cancelado o no tiene episodios fallidos.",
         "operationId": "DownloadJobsController_retry",
         "parameters": [
           {
@@ -934,6 +935,7 @@
     },
     "/api/v1/download-jobs/{id}/cancel": {
       "post": {
+        "description": "Un trabajo QUEUED o RUNNING pasa a CANCELLED junto con los episodios aún sin resolver; los ya resueltos se conservan. Si el trabajo ya había terminado (COMPLETED, PARTIAL o FAILED), no se modifica y se devuelve su estado final: comprueba status para saber si la cancelación llegó a tiempo. Repetirla sobre un trabajo cancelado no cambia nada.",
         "operationId": "DownloadJobsController_cancel",
         "parameters": [
           {
