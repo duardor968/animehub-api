@@ -87,6 +87,7 @@ describe('CatalogService out-of-range pages', () => {
     expect(response.data).toEqual([]);
     expect(response.meta.page).toBe(51);
     expect(response.meta.totalPages).toBe(50);
+    expect(response.meta.capped).toBe(true);
     expect(source.getCatalog).toHaveBeenCalledTimes(1);
   });
 

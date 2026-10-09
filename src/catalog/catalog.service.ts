@@ -9,6 +9,10 @@ import { CatalogResponseDto, SuggestionResponseDto } from '../common/contracts';
 import { serializeAnime, serializeCategory } from '../common/serializers';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectionService } from '../projection/projection.service';
+import {
+  ANIMEAV1_CATALOG_PAGE_SIZE,
+  isCatalogCapped,
+} from '../source/animeav1.constants';
 import { AnimeAv1Service } from '../source/animeav1.service';
 import { CatalogQueryDto } from './catalog-query.dto';
 
@@ -71,9 +75,10 @@ export class CatalogService {
       data: snapshot.items.map(({ anime }) => serializeAnime(anime)),
       meta: {
         page,
-        perPage: 20,
+        perPage: ANIMEAV1_CATALOG_PAGE_SIZE,
         totalPages: snapshot.totalPages ?? 0,
         totalRecords: snapshot.totalRecords ?? 0,
+        capped: isCatalogCapped(snapshot.totalRecords),
         categories: categories.map(serializeCategory),
         genres: genres.map(serializeCategory),
         years: [

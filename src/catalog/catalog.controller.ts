@@ -9,6 +9,11 @@ import {
 import { CatalogResponseDto, SuggestionResponseDto } from '../common/contracts';
 import { ApiProblemResponses } from '../common/openapi-problem-responses';
 import {
+  ANIMEAV1_CATALOG_MAX_PAGES,
+  ANIMEAV1_CATALOG_MAX_RECORDS,
+  ANIMEAV1_CATALOG_PAGE_SIZE,
+} from '../source/animeav1.constants';
+import {
   catalogOrderValues,
   catalogStatusValues,
   CatalogQueryDto,
@@ -23,7 +28,10 @@ export class CatalogController {
 
   @Get()
   @RouteConfig({ rateLimit: { max: 60, timeWindow: '1 minute' } })
-  @ApiOperation({ summary: 'Busca y filtra el catálogo paginado' })
+  @ApiOperation({
+    summary: 'Busca y filtra el catálogo paginado',
+    description: `La fuente sirve páginas de ${ANIMEAV1_CATALOG_PAGE_SIZE} y como máximo ${ANIMEAV1_CATALOG_MAX_RECORDS} resultados (${ANIMEAV1_CATALOG_MAX_PAGES} páginas) por consulta. Cuando una consulta coincide con más títulos, la fuente trunca el conjunto: meta.totalRecords se queda en ${ANIMEAV1_CATALOG_MAX_RECORDS}, las páginas posteriores a la ${ANIMEAV1_CATALOG_MAX_PAGES} llegan vacías y meta.capped es true. Para alcanzar el resto hay que acotar la consulta (inicial, años, género, formato o estado).`,
+  })
   @ApiQuery({
     name: 'page',
     required: false,
