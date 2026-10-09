@@ -13,6 +13,8 @@ const environmentSchema = z.object({
     .min(10)
     .default('AnimeHub/1.0 (+https://github.com/duardor968/animehub-web)'),
   JOBS_ENABLED: z.enum(['true', 'false']).default('true'),
+  // Read directly by createFastifyAdapter (before Nest config exists).
+  TRUST_PROXY: z.string().optional(),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),

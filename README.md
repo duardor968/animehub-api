@@ -56,6 +56,7 @@ Swagger queda en `http://localhost:8000/docs` y el contrato en `http://localhost
 | `ANIMEAV1_BASE_URL` | Origen de la fuente; por defecto, `https://animeav1.com`.                              |
 | `SOURCE_USER_AGENT` | Identificación de las solicitudes a la fuente.                                         |
 | `JOBS_ENABLED`      | Activa los trabajadores y refrescos programados. Déjalo en `true` para usar los lotes. |
+| `TRUST_PROXY`       | Proxies fiables para `X-Forwarded-For` (`true`, saltos o IP/CIDR); si falta, ninguno.  |
 | `LOG_LEVEL`         | Nivel de los logs; por defecto, `info`.                                                |
 
 Mantén `.env` fuera de Git. La Web no necesita conocer `DATABASE_URL`.
