@@ -67,7 +67,7 @@ function createHarness(options: HarnessOptions = {}) {
     synopsis: sourceDetail.synopsis,
     posterUrl: sourceDetail.posterUrl,
     backdropUrl: sourceDetail.backdropUrl,
-    status: options.status ?? ('AIRING' as SourceStatus),
+    status: options.status ?? 'AIRING',
     category: null,
     startDate: sourceDetail.startDate,
     mature: false,
