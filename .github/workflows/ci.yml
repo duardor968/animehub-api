@@ -42,7 +42,7 @@ jobs:
         with:
           node-version: 24.13.0
       - name: Enable pnpm
-        run: corepack enable && corepack prepare pnpm@11.20.0 --activate
+        run: corepack enable && corepack prepare pnpm@12.10.1 --activate
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Apply migrations
