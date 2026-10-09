@@ -1,6 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AnimeAv1Service } from '../source/animeav1.service';
+import {
+  AnimeAv1NotFoundError,
+  AnimeAv1Service,
+  AnimeAv1UnavailableError,
+} from '../source/animeav1.service';
 import { AnimeService } from '../anime/anime.service';
 import {
   ProviderDto,
@@ -86,9 +90,25 @@ export class DownloadResolverService {
           request.audio,
           request.providers,
           Boolean(request.refresh),
-        ),
+        ).catch((error: unknown): ResolvedEpisodeDto => {
+          // One slow/failed mirror page must not discard the other results.
+          if (!(error instanceof AnimeAv1UnavailableError)) throw error;
+          return {
+            episodeNumber: number,
+            audio: request.audio,
+            links: [],
+            errorCode: 'SOURCE_UNAVAILABLE',
+          };
+        }),
       ),
     );
+    if (
+      episodes.every((episode) => episode.errorCode === 'SOURCE_UNAVAILABLE')
+    ) {
+      throw new ServiceUnavailableException(
+        'AnimeAV1 is temporarily unavailable.',
+      );
+    }
     return { data: { packageName: anime.title, episodes } };
   }
 
@@ -119,7 +139,19 @@ export class DownloadResolverService {
       !episode.downloadProbe ||
       episode.downloadProbe.expiresAt <= now
     ) {
-      const source = await this.source.getEpisodeDownloads(slug, number);
+      let source;
+      try {
+        source = await this.source.getEpisodeDownloads(slug, number);
+      } catch (error) {
+        if (!(error instanceof AnimeAv1NotFoundError)) throw error;
+        // Known locally but gone at the source (renumbered or removed).
+        return {
+          episodeNumber: number,
+          audio: requestedAudio,
+          links: [],
+          errorCode: 'EPISODE_NOT_FOUND',
+        };
+      }
       const ttl = linkTtlMinutes(
         episode.publishedAt,
         source.links.length === 0,

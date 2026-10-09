@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { ValidationPipe } from '@nestjs/common';
+import { HttpException, ValidationPipe } from '@nestjs/common';
 import { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
 import helmet from '@fastify/helmet';
@@ -36,6 +36,19 @@ export async function configureApp(app: NestFastifyApplication) {
   await app.register(rateLimit, {
     max: 120,
     timeWindow: '1 minute',
+    // The plugin's default is a plain Error carrying statusCode 429, which the
+    // Nest Fastify adapter does not map: it reached ProblemDetailsFilter as an
+    // unknown error and went out as 500. Throw an HttpException instead; the
+    // plugin has already set Retry-After and the X-RateLimit-* headers.
+    errorResponseBuilder: (_request, context) =>
+      new HttpException(
+        {
+          statusCode: context.statusCode,
+          error: context.ban ? 'Forbidden' : 'Too Many Requests',
+          message: `Rate limit exceeded, retry in ${context.after}.`,
+        },
+        context.statusCode,
+      ),
   });
 
   const document = createOpenApiDocument(app);

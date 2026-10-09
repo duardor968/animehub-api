@@ -5,8 +5,55 @@ import {
   HttpException,
   HttpStatus,
   Logger,
+  NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import {
+  AnimeAv1NotFoundError,
+  AnimeAv1UnavailableError,
+} from '../source/animeav1.service';
+
+function hasHttpStatusCode(
+  error: unknown,
+): error is Error & { statusCode: number } {
+  return (
+    error instanceof Error &&
+    'statusCode' in error &&
+    typeof error.statusCode === 'number' &&
+    Number.isInteger(error.statusCode) &&
+    error.statusCode >= 400 &&
+    error.statusCode <= 599
+  );
+}
+
+/**
+ * Normalizes anything thrown into an HttpException; `null` means a genuine
+ * internal error (500). Upstream failures become 404/503, and errors raised by
+ * Fastify plugins/parsers keep the status they carry: Nest's Fastify adapter
+ * only maps errors named `FastifyError`, so e.g. @fastify/rate-limit's 429 or a
+ * JSON body SyntaxError (400) would otherwise surface as 500.
+ */
+export function toHttpException(exception: unknown): HttpException | null {
+  if (exception instanceof HttpException) return exception;
+  if (exception instanceof AnimeAv1NotFoundError) {
+    return new NotFoundException('The resource does not exist at the source.');
+  }
+  if (exception instanceof AnimeAv1UnavailableError) {
+    return new ServiceUnavailableException(
+      'AnimeAV1 is temporarily unavailable.',
+    );
+  }
+  if (hasHttpStatusCode(exception)) {
+    return new HttpException(
+      exception.statusCode < 500
+        ? exception.message
+        : 'The request could not be completed.',
+      exception.statusCode,
+    );
+  }
+  return null;
+}
 
 @Catch()
 export class ProblemDetailsFilter implements ExceptionFilter {
@@ -16,12 +63,11 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     const context = host.switchToHttp();
     const response = context.getResponse<FastifyReply>();
     const request = context.getRequest<FastifyRequest>();
-    const status =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
-    const payload =
-      exception instanceof HttpException ? exception.getResponse() : null;
+    const httpException = toHttpException(exception);
+    const status = httpException
+      ? httpException.getStatus()
+      : HttpStatus.INTERNAL_SERVER_ERROR;
+    const payload = httpException ? httpException.getResponse() : null;
     const detail =
       typeof payload === 'string'
         ? payload
@@ -33,10 +79,16 @@ export class ProblemDetailsFilter implements ExceptionFilter {
             ? 'The server could not complete the request.'
             : 'The request could not be completed.';
 
-    if (status >= 500) {
+    if (status === 500) {
       this.logger.error(
         `${request.method} ${request.url} failed`,
         exception instanceof Error ? exception.stack : undefined,
+      );
+    } else if (status > 500) {
+      this.logger.warn(
+        `${request.method} ${request.url} answered ${status}: ${
+          exception instanceof Error ? exception.message : String(exception)
+        }`,
       );
     }
 
