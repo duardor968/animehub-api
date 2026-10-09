@@ -15,6 +15,12 @@ export async function configureApp(app: NestFastifyApplication) {
     .map((origin) => origin.trim())
     .filter(Boolean);
 
+  const rateLimitAllowList = config
+    .get<string>('RATE_LIMIT_ALLOWLIST', '')
+    .split(',')
+    .map((address) => address.trim())
+    .filter(Boolean);
+
   app.setGlobalPrefix('api/v1');
   app.enableCors({ origin: origins, methods: ['GET', 'POST', 'OPTIONS'] });
   app.useGlobalPipes(
@@ -34,8 +40,9 @@ export async function configureApp(app: NestFastifyApplication) {
     crossOriginResourcePolicy: { policy: 'same-site' },
   });
   await app.register(rateLimit, {
-    max: 120,
+    max: Number(config.get<string | number>('RATE_LIMIT_MAX', 120)),
     timeWindow: '1 minute',
+    allowList: rateLimitAllowList,
     // The plugin's default is a plain Error carrying statusCode 429, which the
     // Nest Fastify adapter does not map: it reached ProblemDetailsFilter as an
     // unknown error and went out as 500. Throw an HttpException instead; the
