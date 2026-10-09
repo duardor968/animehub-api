@@ -132,6 +132,9 @@ model Anime {
   nextRefreshAt            DateTime
   unchangedRefreshes       Int                @default(0)
   contentHash              String?
+  // Last time the detail content (title, synopsis, episode list, relations)
+  // was seen to change; the sitemap's lastmod. Not bumped by plain re-sightings.
+  contentUpdatedAt         DateTime           @default(now())
   genres                   AnimeGenre[]
   episodes                 Episode[]
   outgoingRelations        AnimeRelation[]    @relation("RelationSource")

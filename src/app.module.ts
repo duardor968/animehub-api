@@ -9,6 +9,7 @@ import { HomeModule } from './home/home.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectionModule } from './projection/projection.module';
 import { ScheduleModule } from './schedule/schedule.module';
+import { SitemapModule } from './sitemap/sitemap.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ScheduleModule } from './schedule/schedule.module';
     AnimeModule,
     ScheduleModule,
     DownloadsModule,
+    SitemapModule,
   ],
 })
 export class AppModule {}

@@ -1003,6 +1003,55 @@
         "summary": "Cancela los ítems pendientes del trabajo",
         "tags": ["download jobs"]
       }
+    },
+    "/api/v1/sitemap/anime": {
+      "get": {
+        "description": "Todos los anime que conoce la API y siguen disponibles en la fuente, ordenados por slug (máximo 50.000). Respuesta cacheable: Cache-Control \"public, max-age=3600\".",
+        "operationId": "SitemapController_getAnime",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "headers": {
+              "Cache-Control": {
+                "description": "public, max-age=3600",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SitemapAnimeResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Se superó temporalmente el límite de solicitudes.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "El servidor no pudo completar la operación.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Lista los anime disponibles para el sitemap",
+        "tags": ["sitemap"]
+      }
     }
   },
   "info": {
@@ -1860,6 +1909,32 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/DownloadJobDataDto"
+          }
+        },
+        "required": ["data"]
+      },
+      "SitemapAnimeDto": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last known change of the anime page content: the newer of its last detected detail change (title, synopsis, episode list, relations) and its latest episode publication."
+          }
+        },
+        "required": ["slug", "updatedAt"]
+      },
+      "SitemapAnimeResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SitemapAnimeDto"
+            }
           }
         },
         "required": ["data"]

@@ -82,6 +82,7 @@ Las rutas de negocio están bajo `/api/v1`:
 | Lotes                  | `POST /anime/:slug/download-jobs`, `GET /download-jobs/:id`              |
 | Control de trabajos    | `POST /download-jobs/:id/retry`, `POST /download-jobs/:id/cancel`        |
 | Salud                  | `GET /health/live`, `GET /health/ready`                                  |
+| Sitemap                | `GET /sitemap/anime`                                                     |
 
 Las respuestas de negocio usan `data` y, cuando corresponde, `meta`; los errores siguen Problem Details. Consultar o modificar un trabajo exige el token de capacidad que devuelve su creación. Es un token temporal del trabajo, no una sesión de usuario, y debe tratarse como un secreto.
 
