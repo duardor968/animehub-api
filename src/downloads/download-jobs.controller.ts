@@ -4,6 +4,8 @@ import {
   Controller,
   Get,
   Headers,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   UnauthorizedException,
@@ -44,6 +46,7 @@ export class DownloadJobsController {
   constructor(private readonly jobs: DownloadJobsService) {}
 
   @Post('anime/:slug/download-jobs')
+  @HttpCode(HttpStatus.OK)
   @RouteConfig({ rateLimit: { max: 5, timeWindow: '1 minute' } })
   @ApiOperation({
     summary: 'Crea un trabajo durable para una serie, un rango o una selección',
@@ -119,6 +122,7 @@ export class DownloadJobsController {
   }
 
   @Post('download-jobs/:id/retry')
+  @HttpCode(HttpStatus.OK)
   @RouteConfig({ rateLimit: { max: 10, timeWindow: '1 minute' } })
   @ApiBearerAuth('jobCapability')
   @ApiOperation({
@@ -136,6 +140,7 @@ export class DownloadJobsController {
   }
 
   @Post('download-jobs/:id/cancel')
+  @HttpCode(HttpStatus.OK)
   @RouteConfig({ rateLimit: { max: 20, timeWindow: '1 minute' } })
   @ApiBearerAuth('jobCapability')
   @ApiOperation({

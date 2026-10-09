@@ -1,4 +1,11 @@
-import { Body, Controller, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+} from '@nestjs/common';
 import { RouteConfig } from '@nestjs/platform-fastify';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
@@ -14,6 +21,7 @@ export class DownloadController {
   constructor(private readonly resolver: DownloadResolverService) {}
 
   @Post('resolve')
+  @HttpCode(HttpStatus.OK)
   @RouteConfig({ rateLimit: { max: 20, timeWindow: '1 minute' } })
   @ApiOperation({ summary: 'Resuelve hasta cincuenta episodios por operación' })
   @ApiOkResponse({ type: ResolveDownloadsResponseDto })
