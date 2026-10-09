@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   OnModuleDestroy,
   OnModuleInit,
   UnauthorizedException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'node:crypto';
@@ -43,8 +45,55 @@ const UNFINISHED_ITEM_STATUSES: DownloadJobItemStatus[] = [
   DownloadJobItemStatus.RUNNING,
 ];
 
+const JOB_LIFETIME_MS = 24 * 60 * 60_000;
+// Bounds the tokens stored for one job; each POST is rate limited as well.
+const MAX_IDEMPOTENT_REPLAYS = 10;
+
+function sha256(value: string) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
 export function hashCapabilityToken(token: string) {
-  return createHash('sha256').update(token).digest('hex');
+  return sha256(token);
+}
+
+function newCapabilityToken() {
+  return randomBytes(32).toString('base64url');
+}
+
+/** EPISODES numbers as selected: unique, ascending, -0 → 0. */
+function requestedEpisodeNumbers(input: CreateDownloadJobDto) {
+  return [
+    ...new Set((input.episodeNumbers ?? []).map((value) => value + 0)),
+  ].sort((a, b) => a - b);
+}
+
+/**
+ * Identifies what a request asks for, ignoring what the job ignores (bounds
+ * sent with ALL, order and duplicates of episode numbers), so an idempotent
+ * retry matches its original and a reused key with another request does not.
+ */
+export function requestFingerprint(input: CreateDownloadJobDto) {
+  return sha256(
+    JSON.stringify({
+      scope: input.scope,
+      audio: input.audio,
+      providers: input.providers,
+      from: input.scope === DownloadScopeDto.RANGE ? input.from : null,
+      to: input.scope === DownloadScopeDto.RANGE ? input.to : null,
+      episodeNumbers:
+        input.scope === DownloadScopeDto.EPISODES
+          ? requestedEpisodeNumbers(input)
+          : null,
+    }),
+  );
+}
+
+function isUniqueViolation(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === 'P2002'
+  );
 }
 
 @Injectable()
@@ -91,10 +140,29 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
     await this.boss?.stop({ graceful: true });
   }
 
+  /**
+   * Creates a job, or, when `idempotencyKey` was already used for this anime
+   * with the same request in the job's lifetime, returns that job with a new
+   * capability token: the client that lost the first response (aborted, timed
+   * out) can still poll or cancel the job, and a retried POST does not start
+   * a duplicate. Tokens issued earlier for the job stay valid.
+   */
   async create(
     slug: string,
     input: CreateDownloadJobDto,
+    idempotencyKey?: string,
   ): Promise<DownloadJobReceiptResponseDto> {
+    const idempotency = idempotencyKey
+      ? {
+          keyHash: sha256(idempotencyKey),
+          fingerprint: requestFingerprint(input),
+        }
+      : undefined;
+    // Answer a replay from the database, without the anime refresh below.
+    if (idempotency) {
+      const replayed = await this.replay(slug, input, idempotency);
+      if (replayed) return replayed;
+    }
     const anime = await this.animeService.ensureAnime(slug);
     const { episodes, missingEpisodeNumbers } = await this.selectEpisodes(
       anime.id,
@@ -103,22 +171,35 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
     if (episodes.length === 0) {
       throw new BadRequestException('No episodes match the requested scope.');
     }
-    const accessToken = randomBytes(32).toString('base64url');
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60_000);
-    const job = await this.prisma.downloadJob.create({
-      data: {
-        animeId: anime.id,
-        accessTokenHash: hashCapabilityToken(accessToken),
-        requestedAudio: input.audio,
-        providers: input.providers,
-        packageName: anime.title,
-        totalItems: episodes.length,
-        expiresAt,
-        items: {
-          create: episodes.map((episode) => ({ episodeId: episode.id })),
+    const accessToken = newCapabilityToken();
+    const expiresAt = new Date(Date.now() + JOB_LIFETIME_MS);
+    let job: { id: string };
+    try {
+      job = await this.prisma.downloadJob.create({
+        data: {
+          animeId: anime.id,
+          accessTokenHash: hashCapabilityToken(accessToken),
+          requestedAudio: input.audio,
+          providers: input.providers,
+          packageName: anime.title,
+          totalItems: episodes.length,
+          expiresAt,
+          idempotencyKeyHash: idempotency?.keyHash,
+          requestFingerprint: idempotency?.fingerprint,
+          items: {
+            create: episodes.map((episode) => ({ episodeId: episode.id })),
+          },
         },
-      },
-    });
+        select: { id: true },
+      });
+    } catch (error) {
+      // A concurrent request with the same key created the job first.
+      if (idempotency && isUniqueViolation(error)) {
+        const replayed = await this.replay(slug, input, idempotency);
+        if (replayed) return replayed;
+      }
+      throw error;
+    }
     if (this.boss) {
       await this.boss.send(
         QUEUE_NAME,
@@ -138,12 +219,66 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
+  private async replay(
+    slug: string,
+    input: CreateDownloadJobDto,
+    idempotency: { keyHash: string; fingerprint: string },
+  ): Promise<DownloadJobReceiptResponseDto | null> {
+    const job = await this.prisma.downloadJob.findFirst({
+      where: { idempotencyKeyHash: idempotency.keyHash, anime: { slug } },
+      select: {
+        id: true,
+        expiresAt: true,
+        requestFingerprint: true,
+        replayTokenHashes: true,
+        items: { select: { episode: { select: { number: true } } } },
+      },
+    });
+    if (!job) return null;
+    if (job.expiresAt <= new Date()) {
+      // A key lives as long as its job: free it for a new one.
+      await this.prisma.downloadJob.updateMany({
+        where: { id: job.id, idempotencyKeyHash: idempotency.keyHash },
+        data: { idempotencyKeyHash: null },
+      });
+      return null;
+    }
+    if (job.requestFingerprint !== idempotency.fingerprint) {
+      throw new UnprocessableEntityException(
+        'This Idempotency-Key was already used with a different request.',
+      );
+    }
+    if (job.replayTokenHashes.length >= MAX_IDEMPOTENT_REPLAYS) {
+      throw new ConflictException(
+        'This Idempotency-Key was replayed too many times; start a new job.',
+      );
+    }
+    const accessToken = newCapabilityToken();
+    await this.prisma.downloadJob.update({
+      where: { id: job.id },
+      data: {
+        replayTokenHashes: { push: hashCapabilityToken(accessToken) },
+      },
+    });
+    const queued = new Set(job.items.map((item) => item.episode.number));
+    return {
+      data: {
+        jobId: job.id,
+        accessToken,
+        expiresAt: job.expiresAt.toISOString(),
+        missingEpisodeNumbers:
+          input.scope === DownloadScopeDto.EPISODES
+            ? requestedEpisodeNumbers(input).filter(
+                (value) => !queued.has(value),
+              )
+            : [],
+      },
+    };
+  }
+
   private async selectEpisodes(animeId: string, input: CreateDownloadJobDto) {
     if (input.scope === DownloadScopeDto.EPISODES) {
-      // Validation guarantees a non-empty, duplicate-free list; -0 → 0.
-      const requested = [
-        ...new Set((input.episodeNumbers ?? []).map((value) => value + 0)),
-      ].sort((a, b) => a - b);
+      const requested = requestedEpisodeNumbers(input);
       const episodes = await this.prisma.episode.findMany({
         where: { animeId, number: { in: requested } },
         orderBy: { number: 'asc' },
@@ -350,10 +485,12 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
         },
       },
     });
+    const tokenHash = hashCapabilityToken(token);
     if (
       !job ||
       job.expiresAt <= new Date() ||
-      hashCapabilityToken(token) !== job.accessTokenHash
+      (tokenHash !== job.accessTokenHash &&
+        !job.replayTokenHashes.includes(tokenHash))
     ) {
       throw new UnauthorizedException('Invalid or expired job capability.');
     }

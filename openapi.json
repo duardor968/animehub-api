@@ -682,6 +682,18 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "idempotency-key",
+            "required": false,
+            "in": "header",
+            "description": "Clave única por intento del usuario (p. ej. un UUID v4), repetida en cada reintento de esa misma solicitud. Si la clave ya creó un trabajo de este anime con el mismo cuerpo y el trabajo no ha expirado, se devuelve ese trabajo con un accessToken nuevo en lugar de crear otro; los tokens anteriores siguen valiendo. Con otro cuerpo responde 422; tras 10 repeticiones, 409.",
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_.:-]+$"
+            }
           }
         ],
         "requestBody": {
@@ -735,6 +747,26 @@
           },
           "404": {
             "description": "El recurso solicitado no existe.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "El estado actual impide completar la operación.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "La solicitud contradice otra anterior con la misma clave de idempotencia.",
             "content": {
               "application/problem+json": {
                 "schema": {

@@ -111,4 +111,20 @@ describe('generated OpenAPI contract', () => {
       },
     });
   });
+
+  it('documents the optional Idempotency-Key of job creation', () => {
+    const operation =
+      document.paths['/api/v1/anime/{slug}/download-jobs']?.post;
+    const headers = (operation?.parameters ?? []).filter(
+      (parameter) => !('$ref' in parameter) && parameter.in === 'header',
+    );
+    expect(headers).toHaveLength(1);
+    expect(headers[0]).toMatchObject({
+      name: 'idempotency-key',
+      required: false,
+      schema: { minLength: 16, maxLength: 128 },
+    });
+    expect(operation?.responses?.[409]).toBeDefined();
+    expect(operation?.responses?.[422]).toBeDefined();
+  });
 });
