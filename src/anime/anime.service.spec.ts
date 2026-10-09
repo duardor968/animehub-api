@@ -1,7 +1,12 @@
+import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { vi } from 'vitest';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectionService } from '../projection/projection.service';
-import { AnimeAv1Service } from '../source/animeav1.service';
+import {
+  AnimeAv1NotFoundError,
+  AnimeAv1Service,
+  AnimeAv1UnavailableError,
+} from '../source/animeav1.service';
 import type {
   SourceAnimeDetail,
   SourceEpisode,
@@ -46,6 +51,7 @@ interface HarnessOptions {
   initialEpisodes?: SourceEpisode[];
   nextRefreshAt?: Date;
   nextEpisodeAt?: Date | null;
+  cached?: boolean;
 }
 
 function toEpisodeRecord(episode: SourceEpisode) {
@@ -81,9 +87,10 @@ function createHarness(options: HarnessOptions = {}) {
   let episodes = (options.initialEpisodes ?? [cachedEpisode]).map(
     toEpisodeRecord,
   );
+  const cached = options.cached ?? true;
   const prisma = {
     anime: {
-      findUnique: vi.fn(() => Promise.resolve(anime)),
+      findUnique: vi.fn(() => Promise.resolve(cached ? anime : null)),
       findUniqueOrThrow: vi.fn(() => Promise.resolve(anime)),
     },
     episode: {
@@ -176,5 +183,28 @@ describe('AnimeService episode freshness', () => {
     expect(source.getAnime).toHaveBeenCalledTimes(1);
     expect(response.data.map((episode) => episode.number)).toEqual([1]);
     expect(response.meta.totalRecords).toBe(1);
+  });
+});
+
+describe('AnimeService unknown slugs', () => {
+  it('answers 404 when the source says the anime does not exist', async () => {
+    const { service, source } = createHarness({ cached: false });
+    source.getAnime.mockRejectedValue(new AnimeAv1NotFoundError('/media/x'));
+
+    await expect(service.getAnime('zz-no-existe')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(service.getEpisodes('zz-no-existe', 1)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('keeps 503 for a real upstream outage on an uncached slug', async () => {
+    const { service, source } = createHarness({ cached: false });
+    source.getAnime.mockRejectedValue(new AnimeAv1UnavailableError('down'));
+
+    await expect(service.getAnime('one-piece')).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    );
   });
 });
