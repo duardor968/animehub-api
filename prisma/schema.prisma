@@ -247,24 +247,32 @@ model DownloadProbe {
 }
 
 model DownloadJob {
-  id              String             @id @default(cuid())
-  animeId         String
-  anime           Anime              @relation(fields: [animeId], references: [id], onDelete: Cascade)
-  accessTokenHash String             @unique
-  status          DownloadJobStatus  @default(QUEUED)
-  requestedAudio  AudioType
-  providers       DownloadProvider[]
-  packageName     String
-  totalItems      Int
-  completedItems  Int                @default(0)
-  failedItems     Int                @default(0)
-  expiresAt       DateTime
-  startedAt       DateTime?
-  completedAt     DateTime?
-  items           DownloadJobItem[]
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  id                 String             @id @default(cuid())
+  animeId            String
+  anime              Anime              @relation(fields: [animeId], references: [id], onDelete: Cascade)
+  accessTokenHash    String             @unique
+  status             DownloadJobStatus  @default(QUEUED)
+  requestedAudio     AudioType
+  providers          DownloadProvider[]
+  packageName        String
+  totalItems         Int
+  completedItems     Int                @default(0)
+  failedItems        Int                @default(0)
+  expiresAt          DateTime
+  startedAt          DateTime?
+  completedAt        DateTime?
+  // SHA-256 of the client's Idempotency-Key and of the normalized request it
+  // came with. A retried POST with the same key returns this job (while it has
+  // not expired) instead of creating a duplicate.
+  idempotencyKeyHash String?
+  requestFingerprint String?
+  // Capabilities issued to those replays; accessTokenHash keeps the first one.
+  replayTokenHashes  String[]           @default([])
+  items              DownloadJobItem[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
+  @@unique([animeId, idempotencyKeyHash])
   @@index([status, createdAt])
   @@index([expiresAt])
 }
