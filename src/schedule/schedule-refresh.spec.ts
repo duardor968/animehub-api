@@ -232,6 +232,23 @@ describe('schedule season rollover and finale publication', () => {
       )?.isFinalEpisode,
     ).toBe(true);
   });
+  it('omits series the source still lists weeks after their last episode', async () => {
+    const h = harness();
+    // Like "Yamato yo, Towa ni: Rebel 3199" (last episode 11 months earlier)
+    // or a series on a seasonal break: no longer a weekly slot.
+    const hiatus = h.add('hiatus', 14, hoursAgo(21 * 24 + 1));
+    const skippedTwoWeeks = h.add('skipped-two-weeks', 8, hoursAgo(20 * 24));
+    h.snapshot.items.unshift(hiatus, skippedTwoWeeks);
+    h.source.getSchedule.mockResolvedValue(
+      h.snapshot.items
+        .slice(0, 20)
+        .map((x) => ({ anime: x.anime, episode: x.episode })),
+    );
+    const slugs = (await h.service.getSchedule()).data.map((x) => x.anime.slug);
+    expect(slugs).not.toContain('hiatus');
+    expect(slugs).toContain('skipped-two-weeks');
+    expect(slugs).toHaveLength(19);
+  });
   it('expires an old finale even when its last-seen label is recent', async () => {
     const h = harness();
     const item = h.add('finale', 12, hoursAgo(49));

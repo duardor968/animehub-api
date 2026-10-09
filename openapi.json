@@ -1559,13 +1559,16 @@
             "$ref": "#/components/schemas/EpisodeDto"
           },
           "basisPublishedAt": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time",
+            "description": "Equals latestEpisode.publishedAt. Its weekday and time in the viewer's time zone define the weekly slot; the next episode is expected 7 days later. Entries whose basisPublishedAt is more than 21 days old (hiatus or irregular releases) are omitted."
           },
           "isFinalEpisode": {
             "type": "boolean",
-            "description": "The published episode completes a finished series."
+            "description": "latestEpisode completes a finished series: there is no next episode. Such entries are kept for 48 hours after basisPublishedAt."
           }
         },
+        "description": "One weekly slot. latestEpisode is the newest episode of the series already published at the source (never a future one); the next expected episode is latestEpisode.number + 1, due 7 days after basisPublishedAt, unless isFinalEpisode.",
         "required": [
           "anime",
           "latestEpisode",

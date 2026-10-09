@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, ApiSchema } from '@nestjs/swagger';
 import {
   ANIMEAV1_CATALOG_MAX_PAGES,
   ANIMEAV1_CATALOG_MAX_RECORDS,
@@ -169,12 +169,22 @@ export class EpisodePageResponseDto {
   @ApiProperty({ type: EpisodePageMetaDto }) meta!: EpisodePageMetaDto;
 }
 
+@ApiSchema({
+  description:
+    'One weekly slot. latestEpisode is the newest episode of the series already published at the source (never a future one); the next expected episode is latestEpisode.number + 1, due 7 days after basisPublishedAt, unless isFinalEpisode.',
+})
 export class ScheduleEntryDto {
   @ApiProperty({ type: AnimeSummaryDto }) anime!: AnimeSummaryDto;
   @ApiProperty({ type: EpisodeDto }) latestEpisode!: EpisodeDto;
-  @ApiProperty() basisPublishedAt!: string;
   @ApiProperty({
-    description: 'The published episode completes a finished series.',
+    format: 'date-time',
+    description:
+      "Equals latestEpisode.publishedAt. Its weekday and time in the viewer's time zone define the weekly slot; the next episode is expected 7 days later. Entries whose basisPublishedAt is more than 21 days old (hiatus or irregular releases) are omitted.",
+  })
+  basisPublishedAt!: string;
+  @ApiProperty({
+    description:
+      'latestEpisode completes a finished series: there is no next episode. Such entries are kept for 48 hours after basisPublishedAt.',
   })
   isFinalEpisode!: boolean;
 }
