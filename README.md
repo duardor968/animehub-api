@@ -71,6 +71,8 @@ El límite se cuenta por IP de cliente. Las páginas que la Web renderiza en el 
 
 Sin `TRUST_PROXY`, la API ignora `X-Forwarded-For` y todo el SSR comparte el cupo de la IP de la Web. Confía solo en proxies que controlas y que fijan la cabecera: un salto de confianza que reenvía el `X-Forwarded-For` del cliente sin revisarlo le permite inventarse la IP y esquivar el límite. No hay lista de IP exentas a propósito: eximir a la Web eximiría también las consultas a AnimeAV1 que provoca cada visitante.
 
+Las respuestas 429 llevan `Retry-After` (en segundos), legible desde el navegador por CORS junto con `X-RateLimit-*`. `GET /download-jobs/:id` tiene su propio cupo de 300 solicitudes por minuto, aparte de `RATE_LIMIT_MAX`, para que sondear varios trabajos a la vez no agote el límite general.
+
 ## Contrato de la API
 
 [`openapi.json`](openapi.json) es la especificación versionada de este repositorio. Se genera a partir de los controladores y DTO de NestJS:

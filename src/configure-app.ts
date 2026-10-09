@@ -16,7 +16,18 @@ export async function configureApp(app: NestFastifyApplication) {
     .filter(Boolean);
 
   app.setGlobalPrefix('api/v1');
-  app.enableCors({ origin: origins, methods: ['GET', 'POST', 'OPTIONS'] });
+  app.enableCors({
+    origin: origins,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    // Not CORS-safelisted: without this a browser cannot read when to retry
+    // after a 429, or how much of the limit is left.
+    exposedHeaders: [
+      'Retry-After',
+      'X-RateLimit-Limit',
+      'X-RateLimit-Remaining',
+      'X-RateLimit-Reset',
+    ],
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,

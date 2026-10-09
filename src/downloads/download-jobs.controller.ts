@@ -36,6 +36,8 @@ const IDEMPOTENCY_KEY_MIN_LENGTH = 16;
 const IDEMPOTENCY_KEY_MAX_LENGTH = 128;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9_.:-]+$/;
 
+export const JOB_POLL_RATE_LIMIT = 300;
+
 @ApiTags('download jobs')
 @Controller()
 export class DownloadJobsController {
@@ -94,10 +96,18 @@ export class DownloadJobsController {
   }
 
   @Get('download-jobs/:id')
-  @RouteConfig({ rateLimit: { max: 120, timeWindow: '1 minute' } })
+  // Capability-protected polling gets its own per-address bucket, apart from
+  // RATE_LIMIT_MAX. The Web polls each job every 1.25 s (48/min) and one
+  // address can start 5 jobs a minute (POST above): 5 × 48 = 240, plus room
+  // for a second tab or a shared NAT. Beyond that, a 429 with Retry-After
+  // only slows progress updates; the job itself keeps running.
+  @RouteConfig({
+    rateLimit: { max: JOB_POLL_RATE_LIMIT, timeWindow: '1 minute' },
+  })
   @ApiBearerAuth('jobCapability')
   @ApiOperation({
     summary: 'Consulta progreso y resultados mediante capacidad',
+    description: `Tiene un límite propio de ${JOB_POLL_RATE_LIMIT} solicitudes por minuto y dirección, aparte del general. Al superarlo responde 429 con Retry-After (segundos): espera ese tiempo y sigue sondeando; el trabajo continúa.`,
   })
   @ApiOkResponse({ type: DownloadJobResponseDto })
   @ApiProblemResponses(401, 429, 500)

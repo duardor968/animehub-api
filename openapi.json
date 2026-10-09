@@ -110,6 +110,15 @@
           },
           "429": {
             "description": "Se superó temporalmente el límite de solicitudes.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos que conviene esperar antes de reintentar.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -179,6 +188,15 @@
           },
           "429": {
             "description": "Se superó temporalmente el límite de solicitudes.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos que conviene esperar antes de reintentar.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -269,6 +287,15 @@
           },
           "429": {
             "description": "Se superó temporalmente el límite de solicitudes.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos que conviene esperar antes de reintentar.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -437,6 +464,15 @@
           },
           "429": {
             "description": "Se superó temporalmente el límite de solicitudes.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos que conviene esperar antes de reintentar.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -508,6 +544,15 @@
           },
           "429": {
             "description": "Se superó temporalmente el límite de solicitudes.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos que conviene esperar antes de reintentar.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -548,6 +593,15 @@
           },
           "429": {
             "description": "Se superó temporalmente el límite de solicitudes.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos que conviene esperar antes de reintentar.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -637,6 +691,15 @@
           },
           "429": {
             "description": "Se superó temporalmente el límite de solicitudes.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos que conviene esperar antes de reintentar.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -777,6 +840,15 @@
           },
           "429": {
             "description": "Se superó temporalmente el límite de solicitudes.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos que conviene esperar antes de reintentar.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -812,6 +884,7 @@
     },
     "/api/v1/download-jobs/{id}": {
       "get": {
+        "description": "Tiene un límite propio de 300 solicitudes por minuto y dirección, aparte del general. Al superarlo responde 429 con Retry-After (segundos): espera ese tiempo y sigue sondeando; el trabajo continúa.",
         "operationId": "DownloadJobsController_get",
         "parameters": [
           {
@@ -854,6 +927,15 @@
           },
           "429": {
             "description": "Se superó temporalmente el límite de solicitudes.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos que conviene esperar antes de reintentar.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -937,6 +1019,15 @@
           },
           "429": {
             "description": "Se superó temporalmente el límite de solicitudes.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos que conviene esperar antes de reintentar.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1010,6 +1101,15 @@
           },
           "429": {
             "description": "Se superó temporalmente el límite de solicitudes.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos que conviene esperar antes de reintentar.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -1064,6 +1164,15 @@
           },
           "429": {
             "description": "Se superó temporalmente el límite de solicitudes.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos que conviene esperar antes de reintentar.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
             "content": {
               "application/problem+json": {
                 "schema": {

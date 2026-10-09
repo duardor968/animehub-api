@@ -22,6 +22,17 @@ export function ApiProblemResponses(...statuses: ProblemStatus[]) {
       ApiResponse({
         status,
         description: descriptions[status],
+        ...(status === 429
+          ? {
+              headers: {
+                'Retry-After': {
+                  description:
+                    'Segundos que conviene esperar antes de reintentar.',
+                  schema: { type: 'integer', minimum: 0 },
+                },
+              },
+            }
+          : {}),
         content: {
           'application/problem+json': {
             schema: { $ref: getSchemaPath(ProblemDetailsDto) },
