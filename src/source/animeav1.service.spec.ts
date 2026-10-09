@@ -1,7 +1,11 @@
 import { ConfigService } from '@nestjs/config';
 import { stringify } from 'devalue';
 import { vi } from 'vitest';
-import { AnimeAv1Service } from './animeav1.service';
+import {
+  AnimeAv1NotFoundError,
+  AnimeAv1Service,
+  AnimeAv1UnavailableError,
+} from './animeav1.service';
 
 function routeResponse(data: unknown) {
   return new Response(
@@ -203,5 +207,70 @@ describe('AnimeAv1Service bounded home source', () => {
     controller.abort();
     expect(await result).toBeInstanceOf(Error);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AnimeAv1Service route errors', () => {
+  const service = new AnimeAv1Service(
+    new ConfigService({ ANIMEAV1_BASE_URL: 'https://source.test' }),
+  );
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  // Verbatim shape of https://animeav1.com/media/<unknown>/__data.json: HTTP
+  // 200, a layout data node, and the page's load() error(404) as the leaf.
+  const unknownSlugEnvelope = () =>
+    new Response(
+      JSON.stringify({
+        type: 'data',
+        nodes: [
+          null,
+          { type: 'data', data: [{ user: 1 }, null] },
+          {
+            type: 'error',
+            error: { message: 'Titulo no encontrado' },
+            status: 404,
+          },
+        ],
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+
+  it('maps an error(404) route node to not found, without retrying', async () => {
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockImplementation(() => Promise.resolve(unknownSlugEnvelope()));
+
+    await expect(service.getAnime('zz-no-existe')).rejects.toBeInstanceOf(
+      AnimeAv1NotFoundError,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats other route errors and payload drift as unavailability', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(global, 'fetch').mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            type: 'data',
+            nodes: [{ type: 'error', error: { message: 'boom' }, status: 500 }],
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const routeError = service.getAnime('one-piece').catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(await routeError).toBeInstanceOf(AnimeAv1UnavailableError);
+
+    vi.spyOn(global, 'fetch').mockResolvedValue(
+      routeResponse({ media: { id: 1, slug: 'one-piece' } }),
+    );
+    await expect(service.getAnime('one-piece')).rejects.toBeInstanceOf(
+      AnimeAv1UnavailableError,
+    );
   });
 });

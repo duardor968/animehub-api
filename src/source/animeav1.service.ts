@@ -23,6 +23,14 @@ const envelopeSchema = z.object({
   nodes: z.array(z.unknown()),
 });
 
+// SvelteKit reports a load() error(...) as an `error` node in place of the
+// route's data node, with an HTTP 200 envelope (e.g. an unknown slug answers
+// `{"type":"error","error":{"message":"Titulo no encontrado"},"status":404}`).
+const errorNodeSchema = z.object({
+  type: z.literal('error'),
+  status: z.number().optional(),
+});
+
 const categorySchema = z
   .object({
     id: z.union([z.number(), z.string()]),
@@ -143,13 +151,15 @@ export class AnimeAv1Service {
   async getHome(
     signal: AbortSignal = AbortSignal.timeout(15_000),
   ): Promise<SourceHome> {
-    const payload = z
-      .object({
+    const payload = this.parse(
+      z.object({
         featured: z.unknown().optional(),
         latestEpisodes: z.unknown().optional(),
         latestMedia: z.unknown().optional(),
-      })
-      .parse(await this.fetchRoute('/', new URLSearchParams(), signal));
+      }),
+      await this.fetchRoute('/', new URLSearchParams(), signal),
+      '/',
+    );
     // Validate independently. An empty/malformed section preserves its own last
     // good copy; it must not suppress valid updates to other sections.
     const featured = homeSchema.shape.featured.safeParse(payload.featured);
@@ -190,8 +200,10 @@ export class AnimeAv1Service {
   }
 
   async getCatalog(params: URLSearchParams): Promise<SourceCatalog> {
-    const data = catalogSchema.parse(
+    const data = this.parse(
+      catalogSchema,
       await this.fetchRoute('/catalogo', params),
+      '/catalogo',
     );
     return {
       results: data.results.map((anime) => this.normalizeAnime(anime)),
@@ -213,12 +225,11 @@ export class AnimeAv1Service {
     slug: string,
     signal?: AbortSignal,
   ): Promise<SourceAnimeDetail> {
-    const data = animeDetailSchema.parse(
-      await this.fetchRoute(
-        `/media/${encodeURIComponent(slug)}`,
-        new URLSearchParams(),
-        signal,
-      ),
+    const path = `/media/${encodeURIComponent(slug)}`;
+    const data = this.parse(
+      animeDetailSchema,
+      await this.fetchRoute(path, new URLSearchParams(), signal),
+      path,
     );
     const media = data.media;
     const aliases = media.aka ? Object.values(media.aka).filter(Boolean) : [];
@@ -243,7 +254,11 @@ export class AnimeAv1Service {
   }
 
   async getSchedule(): Promise<SourceScheduleEntry[]> {
-    const data = scheduleSchema.parse(await this.fetchRoute('/horario'));
+    const data = this.parse(
+      scheduleSchema,
+      await this.fetchRoute('/horario'),
+      '/horario',
+    );
     // Keep entries without an episode; the projection can use a known timestamp.
     return data.media.map((anime) => ({
       anime: this.normalizeAnime(anime),
@@ -261,10 +276,11 @@ export class AnimeAv1Service {
     slug: string,
     number: number,
   ): Promise<SourceEpisodeDownloads> {
-    const data = episodeDownloadsSchema.parse(
-      await this.fetchRoute(
-        `/media/${encodeURIComponent(slug)}/${encodeURIComponent(String(number))}`,
-      ),
+    const path = `/media/${encodeURIComponent(slug)}/${encodeURIComponent(String(number))}`;
+    const data = this.parse(
+      episodeDownloadsSchema,
+      await this.fetchRoute(path),
+      path,
     );
     const links: SourceDownloadLink[] = [];
     for (const [audioName, entries] of Object.entries(data.downloads)) {
@@ -324,7 +340,14 @@ export class AnimeAv1Service {
             }
             throw new Error(`Retryable source status ${response.status}`);
           }
-          const envelope = envelopeSchema.parse(await response.json());
+          const body: unknown = await response.json();
+          this.throwIfErrorNode(body, path);
+          const envelope = envelopeSchema.parse(body);
+          // The route's own node is the last one (layouts come first).
+          this.throwIfErrorNode(
+            [...envelope.nodes].reverse().find((value) => value != null),
+            path,
+          );
           const node = [...envelope.nodes]
             .reverse()
             .find((value): value is { type: 'data'; data: unknown[] } =>
@@ -368,6 +391,31 @@ export class AnimeAv1Service {
         .then(resolve, reject)
         .finally(() => signal.removeEventListener('abort', abort));
     });
+  }
+
+  private throwIfErrorNode(value: unknown, path: string) {
+    const error = errorNodeSchema.safeParse(value);
+    if (!error.success) return;
+    if (error.data.status === 404) throw new AnimeAv1NotFoundError(path);
+    throw new AnimeAv1UnavailableError(
+      `Source route error ${error.data.status ?? 'without status'}`,
+    );
+  }
+
+  // A payload that no longer matches the expected shape is an upstream failure
+  // (502/503 territory), never an internal error of this API.
+  private parse<T extends z.ZodType>(
+    schema: T,
+    payload: unknown,
+    path: string,
+  ): z.infer<T> {
+    const result = schema.safeParse(payload);
+    if (result.success) return result.data;
+    const issue = result.error.issues[0];
+    this.logger.warn(
+      `Unexpected AnimeAV1 payload for ${path}: ${issue ? `${issue.path.join('.')} ${issue.message}` : 'invalid'}`,
+    );
+    throw new AnimeAv1UnavailableError(`Unexpected source payload for ${path}`);
   }
 
   private normalizeAnime(
