@@ -96,6 +96,13 @@ function createHarness(options: HarnessOptions = {}) {
     episode: {
       findMany: vi.fn(() => Promise.resolve(episodes)),
       count: vi.fn(() => Promise.resolve(episodes.length)),
+      aggregate: vi.fn(() => {
+        const numbers = episodes.map((episode) => episode.number);
+        return Promise.resolve({
+          _min: { number: numbers.length ? Math.min(...numbers) : null },
+          _max: { number: numbers.length ? Math.max(...numbers) : null },
+        });
+      }),
     },
   };
   const source = { getAnime: vi.fn<() => Promise<SourceAnimeDetail>>() };
@@ -183,6 +190,67 @@ describe('AnimeService episode freshness', () => {
     expect(source.getAnime).toHaveBeenCalledTimes(1);
     expect(response.data.map((episode) => episode.number)).toEqual([1]);
     expect(response.meta.totalRecords).toBe(1);
+  });
+});
+
+describe('AnimeService episode bounds', () => {
+  const episode = (number: number): SourceEpisode => ({
+    ...cachedEpisode,
+    id: `episode-${number}`,
+    number,
+    sourcePath: `/media/airing-show/${number}`,
+  });
+
+  it('reports the bounds of every episode, not only the current page', async () => {
+    const { service, prisma } = createHarness({
+      status: 'FINISHED',
+      nextRefreshAt: new Date(Date.now() + 60_000),
+      initialEpisodes: [episode(1), episode(2), episode(12.5), episode(120)],
+    });
+    // A page only ever sees a slice; the aggregate covers the whole anime.
+    prisma.episode.findMany.mockResolvedValueOnce([]);
+
+    const response = await service.getEpisodes('airing-show', 3);
+
+    expect(response.data).toEqual([]);
+    expect(response.meta).toMatchObject({ firstNumber: 1, lastNumber: 120 });
+    expect(prisma.episode.aggregate).toHaveBeenCalledWith({
+      where: { animeId: 'db-anime' },
+      _min: { number: true },
+      _max: { number: true },
+    });
+  });
+
+  it('keeps a movie numbered 0 instead of treating it as missing', async () => {
+    const { service } = createHarness({
+      status: 'FINISHED',
+      nextRefreshAt: new Date(Date.now() + 60_000),
+      initialEpisodes: [episode(0)],
+    });
+
+    const response = await service.getEpisodes('airing-show', 1);
+
+    expect(response.meta).toMatchObject({
+      totalRecords: 1,
+      firstNumber: 0,
+      lastNumber: 0,
+    });
+  });
+
+  it('returns null bounds for an anime without episodes', async () => {
+    const { service } = createHarness({
+      status: 'FINISHED',
+      nextRefreshAt: new Date(Date.now() + 60_000),
+      initialEpisodes: [],
+    });
+
+    const response = await service.getEpisodes('airing-show', 1);
+
+    expect(response.meta).toMatchObject({
+      totalRecords: 0,
+      firstNumber: null,
+      lastNumber: null,
+    });
   });
 });
 

@@ -1396,9 +1396,26 @@
           },
           "totalRecords": {
             "type": "number"
+          },
+          "firstNumber": {
+            "type": "number",
+            "nullable": true,
+            "description": "Lowest episode number across ALL episodes of the anime (not only this page); null when it has none. Movies are often a single episode 0."
+          },
+          "lastNumber": {
+            "type": "number",
+            "nullable": true,
+            "description": "Highest episode number across ALL episodes of the anime (not only this page); null when it has none."
           }
         },
-        "required": ["page", "perPage", "totalPages", "totalRecords"]
+        "required": [
+          "page",
+          "perPage",
+          "totalPages",
+          "totalRecords",
+          "firstNumber",
+          "lastNumber"
+        ]
       },
       "EpisodePageResponseDto": {
         "type": "object",

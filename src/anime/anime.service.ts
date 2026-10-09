@@ -115,7 +115,7 @@ export class AnimeService {
       anime = await this.prisma.anime.findUniqueOrThrow({ where: { slug } });
     }
     const perPage = 50;
-    const [episodes, totalRecords] = await Promise.all([
+    const [episodes, totalRecords, bounds] = await Promise.all([
       this.prisma.episode.findMany({
         where: { animeId: anime.id },
         orderBy: { number: 'asc' },
@@ -123,6 +123,13 @@ export class AnimeService {
         take: perPage,
       }),
       this.prisma.episode.count({ where: { animeId: anime.id } }),
+      // Bounds span every episode of the anime, not just this page, so clients
+      // can default ranges correctly (movies are often a single episode 0).
+      this.prisma.episode.aggregate({
+        where: { animeId: anime.id },
+        _min: { number: true },
+        _max: { number: true },
+      }),
     ]);
     return {
       data: episodes.map(serializeEpisode),
@@ -131,6 +138,8 @@ export class AnimeService {
         perPage,
         totalPages: Math.ceil(totalRecords / perPage),
         totalRecords,
+        firstNumber: bounds._min.number ?? null,
+        lastNumber: bounds._max.number ?? null,
       },
     };
   }
