@@ -51,6 +51,11 @@ export class HomeStore implements OnModuleDestroy {
 
   // Repeatable read spans Prisma's relation queries. A reader sees one complete
   // published generation, including its anime/episode data and freshness.
+  // Prisma 7.10 sends those relation queries concurrently over the
+  // transaction's one connection, so pg 8.23 queues them and warns "Calling
+  // client.query() when the client is already executing a query is
+  // deprecated". Harmless on pg 8; pg 9 makes it an error, so keep pg on 8
+  // until Prisma serializes queries inside a transaction.
   read() {
     return this.transaction(
       (tx) =>
