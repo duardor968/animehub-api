@@ -6,6 +6,7 @@ import { validateEnvironment } from './config/environment';
 import { DownloadsModule } from './downloads/downloads.module';
 import { HealthModule } from './health/health.module';
 import { HomeModule } from './home/home.module';
+import { MediaModule } from './media/media.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectionModule } from './projection/projection.module';
 import { ScheduleModule } from './schedule/schedule.module';
@@ -26,6 +27,7 @@ import { SitemapModule } from './sitemap/sitemap.module';
     ScheduleModule,
     DownloadsModule,
     SitemapModule,
+    MediaModule,
   ],
 })
 export class AppModule {}

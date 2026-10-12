@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+const optionalUrl = z.union([z.literal(''), z.url()]).optional();
+
 const environmentSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
@@ -17,6 +19,14 @@ const environmentSchema = z.object({
   // Read directly by createFastifyAdapter (before Nest config exists).
   TRUST_PROXY: z.string().optional(),
   RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(120),
+  // S3-compatible storage of the WebP copies of source images. Unless all six
+  // are set, the API serves the source image URLs.
+  MEDIA_S3_ENDPOINT: optionalUrl,
+  MEDIA_S3_REGION: z.string().optional(),
+  MEDIA_S3_ACCESS_KEY_ID: z.string().optional(),
+  MEDIA_S3_SECRET_ACCESS_KEY: z.string().optional(),
+  MEDIA_S3_BUCKET: z.string().optional(),
+  MEDIA_PUBLIC_URL: optionalUrl,
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),

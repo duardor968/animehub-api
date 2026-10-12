@@ -1,3 +1,6 @@
+// Host of AnimeAV1's images; their paths derive from the anime and episode.
+export const ANIMEAV1_CDN_URL = 'https://cdn.animeav1.com';
+
 // AnimeAV1's /catalogo serves fixed pages of 20 records and never more than 50
 // pages per query. Its pagination clamps the advertised totals instead of
 // reporting the real match count: a broad query reports exactly 1000 records /

@@ -295,6 +295,27 @@ model DownloadJobItem {
   @@index([jobId, status])
 }
 
+enum MediaAssetStatus {
+  READY
+  FAILED
+}
+
+// A source image converted to WebP and stored in our bucket, one object per
+// width (see MediaService). Rows appear on the first conversion attempt.
+model MediaAsset {
+  sourceUrl String           @id
+  status    MediaAssetStatus
+  // Hash of the converted source bytes; part of every object key, so a new
+  // source image gets new URLs despite the immutable caching.
+  version   String?
+  widths    Int[]            @default([])
+  etag      String?
+  bytes     Int?
+  failures  Int              @default(0)
+  // Last fetch from the source: schedules retries and revalidation.
+  checkedAt DateTime         @default(now())
+}
+
 // One durable lease coordinates all full/recent home refreshes across replicas.
 // A token fences publishers; failed and partial runs share bounded backoff.
 model HomeRefreshLease {

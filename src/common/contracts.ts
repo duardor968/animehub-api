@@ -5,6 +5,9 @@ import {
 } from '../source/animeav1.constants';
 import { RELATION_KINDS } from '../source/source.types';
 
+const IMAGE_URL_DESCRIPTION =
+  'Our WebP copy, cached for a year, once converted; until then, the source image.';
+
 export class CategoryDto {
   @ApiProperty() id!: string;
   @ApiProperty() name!: string;
@@ -17,10 +20,25 @@ export class AnimeSummaryDto {
   @ApiProperty() title!: string;
   @ApiPropertyOptional({ type: String, nullable: true }) synopsis!:
     string | null;
-  @ApiPropertyOptional({ type: String, nullable: true }) posterUrl!:
-    string | null;
-  @ApiPropertyOptional({ type: String, nullable: true }) backdropUrl!:
-    string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: IMAGE_URL_DESCRIPTION,
+  })
+  posterUrl!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: `${IMAGE_URL_DESCRIPTION} The WebP copy is the widest in backdropSrcSet.`,
+  })
+  backdropUrl!: string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description:
+      'srcset of the WebP backdrop ("<url> 640w, <url> 1280w, <url> 1900w"; narrower sources stop at their own width). null until the backdrop is converted, or without backdropUrl.',
+  })
+  backdropSrcSet!: string | null;
   @ApiPropertyOptional({ type: CategoryDto, nullable: true })
   category!: CategoryDto | null;
   @ApiProperty({ enum: ['UNKNOWN', 'AIRING', 'FINISHED', 'UPCOMING'] })
@@ -46,8 +64,12 @@ export class EpisodeDto {
   @ApiProperty() id!: string;
   @ApiProperty() number!: number;
   @ApiPropertyOptional({ type: String, nullable: true }) title!: string | null;
-  @ApiPropertyOptional({ type: String, nullable: true }) imageUrl!:
-    string | null;
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: IMAGE_URL_DESCRIPTION,
+  })
+  imageUrl!: string | null;
   @ApiPropertyOptional({ type: String, nullable: true }) publishedAt!:
     string | null;
 }

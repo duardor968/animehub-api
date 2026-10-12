@@ -4,6 +4,7 @@ import { unflatten } from 'devalue';
 import pLimit from 'p-limit';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { z } from 'zod';
+import { ANIMEAV1_CDN_URL } from './animeav1.constants';
 import {
   SourceAnimeDetail,
   SourceAnimeSummary,
@@ -448,8 +449,8 @@ export class AnimeAv1Service {
       slug: input.slug,
       title: input.title,
       synopsis: input.synopsis?.trim() || null,
-      posterUrl: `https://cdn.animeav1.com/covers/${id}.jpg`,
-      backdropUrl: `https://cdn.animeav1.com/backdrops/${id}.jpg`,
+      posterUrl: `${ANIMEAV1_CDN_URL}/covers/${id}.jpg`,
+      backdropUrl: `${ANIMEAV1_CDN_URL}/backdrops/${id}.jpg`,
       category: input.category ? this.normalizeCategory(input.category) : null,
       genres: (input.genres ?? []).map((genre) =>
         this.normalizeCategory(genre),
@@ -469,7 +470,7 @@ export class AnimeAv1Service {
       id: String(input.id),
       number: input.number,
       title: input.title?.trim() || null,
-      imageUrl: `https://cdn.animeav1.com/screenshots/${animeId}/${input.number}.jpg`,
+      imageUrl: `${ANIMEAV1_CDN_URL}/screenshots/${animeId}/${input.number}.jpg`,
       sourcePath: `/media/${slug}/${input.number}`,
       publishedAt: this.toDate(input.publishedAt ?? input.createdAt),
     };

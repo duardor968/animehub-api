@@ -112,6 +112,20 @@ describe('generated OpenAPI contract', () => {
     });
   });
 
+  it('documents the WebP backdrop srcset next to backdropUrl', () => {
+    const properties = (
+      document.components?.schemas?.AnimeSummaryDto as {
+        properties: Record<string, object>;
+      }
+    ).properties;
+    for (const field of ['posterUrl', 'backdropUrl', 'backdropSrcSet']) {
+      expect(properties[field]).toMatchObject({
+        type: 'string',
+        nullable: true,
+      });
+    }
+  });
+
   it('documents the optional Idempotency-Key of job creation', () => {
     const operation =
       document.paths['/api/v1/anime/{slug}/download-jobs']?.post;

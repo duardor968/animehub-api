@@ -48,20 +48,32 @@ Swagger queda en `http://localhost:8000/docs` y el contrato en `http://localhost
 
 ### Configuración
 
-| Variable            | Para qué sirve                                                                         |
-| ------------------- | -------------------------------------------------------------------------------------- |
-| `DATABASE_URL`      | Conexión a PostgreSQL, incluida la persistencia de los trabajos.                       |
-| `PORT`              | Puerto HTTP; por defecto, `8000`.                                                      |
-| `HOST`              | Dirección de escucha: `127.0.0.1` en el ejemplo local; por defecto, `0.0.0.0`.         |
-| `CORS_ORIGINS`      | Orígenes permitidos, separados por comas. En local: `http://localhost:3000`.           |
-| `ANIMEAV1_BASE_URL` | Origen de la fuente; por defecto, `https://animeav1.com`.                              |
-| `SOURCE_USER_AGENT` | Identificación de las solicitudes a la fuente.                                         |
-| `JOBS_ENABLED`      | Activa los trabajadores y refrescos programados. Déjalo en `true` para usar los lotes. |
-| `TRUST_PROXY`       | Proxies fiables para `X-Forwarded-For` (`true`, saltos o IP/CIDR); si falta, ninguno.  |
-| `RATE_LIMIT_MAX`    | Solicitudes por minuto y cliente; por defecto, `120`.                                  |
-| `LOG_LEVEL`         | Nivel de los logs; por defecto, `info`.                                                |
+| Variable                     | Para qué sirve                                                                              |
+| ---------------------------- | ------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`               | Conexión a PostgreSQL, incluida la persistencia de los trabajos.                            |
+| `PORT`                       | Puerto HTTP; por defecto, `8000`.                                                           |
+| `HOST`                       | Dirección de escucha: `127.0.0.1` en el ejemplo local; por defecto, `0.0.0.0`.              |
+| `CORS_ORIGINS`               | Orígenes permitidos, separados por comas. En local: `http://localhost:3000`.                |
+| `ANIMEAV1_BASE_URL`          | Origen de la fuente; por defecto, `https://animeav1.com`.                                   |
+| `SOURCE_USER_AGENT`          | Identificación de las solicitudes a la fuente.                                              |
+| `JOBS_ENABLED`               | Activa los trabajadores y refrescos programados. Déjalo en `true` para usar los lotes.      |
+| `TRUST_PROXY`                | Proxies fiables para `X-Forwarded-For` (`true`, saltos o IP/CIDR); si falta, ninguno.       |
+| `RATE_LIMIT_MAX`             | Solicitudes por minuto y cliente; por defecto, `120`.                                       |
+| `LOG_LEVEL`                  | Nivel de los logs; por defecto, `info`.                                                     |
+| `MEDIA_S3_ENDPOINT`          | Endpoint S3 del almacenamiento de imágenes. Supabase: `https://<host>/storage/v1/s3`.       |
+| `MEDIA_S3_REGION`            | Región con la que se firman las solicitudes S3; con Supabase, `us-east-1`.                  |
+| `MEDIA_S3_ACCESS_KEY_ID`     | Clave de acceso S3.                                                                         |
+| `MEDIA_S3_SECRET_ACCESS_KEY` | Secreto de esa clave.                                                                       |
+| `MEDIA_S3_BUCKET`            | Bucket de las copias WebP, de lectura pública: `animehub-media`.                            |
+| `MEDIA_PUBLIC_URL`           | URL pública del bucket. Supabase: `https://<host>/storage/v1/object/public/animehub-media`. |
 
 Mantén `.env` fuera de Git. La Web no necesita conocer `DATABASE_URL`.
+
+### Imágenes
+
+La API sirve las imágenes de AnimeAV1 (pósters, fondos y capturas) como WebP desde su propio bucket. Las convierte bajo demanda: la primera respuesta que incluye una imagen devuelve la URL de AnimeAV1 y encola su conversión; cuando la copia está lista, las respuestas apuntan a ella. Los fondos se guardan en 640, 1280 y 1900 px de ancho y se ofrecen también en `backdropSrcSet`. Cada objeto lleva `Cache-Control: public, max-age=31536000, immutable`, y su URL cambia si cambia la imagen de origen.
+
+Sin las seis variables `MEDIA_*`, la API sigue devolviendo las URL de AnimeAV1; con `JOBS_ENABLED=false` solo sirve las copias ya convertidas. En local sirve cualquier almacenamiento compatible con S3, como MinIO en `http://127.0.0.1:9000` con el bucket `animehub-media` de lectura pública y `MEDIA_PUBLIC_URL=http://127.0.0.1:9000/animehub-media`.
 
 ### Límite de solicitudes y SSR
 

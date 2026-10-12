@@ -30,6 +30,7 @@
     "test:shutdown": "node scripts/check-shutdown.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1149.0",
     "@fastify/helmet": "13.1.2",
     "@fastify/rate-limit": "11.2.1",
     "@fastify/static": "10.1.6",
@@ -49,6 +50,7 @@
     "pg-boss": "12.37.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
+    "sharp": "0.35.5",
     "zod": "4.6.6"
   },
   "devDependencies": {

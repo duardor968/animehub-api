@@ -89,6 +89,8 @@ export function serializeAnime(anime: AnimeRecord): AnimeSummaryDto {
     synopsis: anime.synopsis,
     posterUrl: anime.posterUrl,
     backdropUrl: anime.backdropUrl,
+    // Set by MediaService once the backdrop has WebP widths.
+    backdropSrcSet: null,
     category: anime.category ? serializeCategory(anime.category) : null,
     status: anime.status,
     startDate: anime.startDate?.toISOString() ?? null,
