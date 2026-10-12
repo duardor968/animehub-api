@@ -10,6 +10,7 @@ import {
 import {
   DownloadJobsService,
   hashCapabilityToken,
+  ITEM_LEASE_MS,
 } from './download-jobs.service';
 import { DownloadResolverService } from './download-resolver.service';
 import {
@@ -159,6 +160,7 @@ type ItemRow = {
   resolvedAudio: string | null;
   links: unknown;
   errorCode: string | null;
+  updatedAt: Date;
 };
 type Where = Record<string, unknown>;
 
@@ -167,6 +169,9 @@ function matches(row: object, where: Where) {
     const value = (row as Record<string, unknown>)[key];
     if (condition && typeof condition === 'object' && 'in' in condition) {
       return (condition.in as unknown[]).includes(value);
+    }
+    if (condition && typeof condition === 'object' && 'lt' in condition) {
+      return (value as Date) < (condition.lt as Date);
     }
     return value === condition;
   });
@@ -253,6 +258,7 @@ function jobHarness(
     resolvedAudio: null,
     links: null,
     errorCode: null,
+    updatedAt: new Date(),
   }));
   const snapshot = () => ({
     ...job,
@@ -267,6 +273,20 @@ function jobHarness(
       findUnique: vi.fn(({ where }: { where: { id: string } }) =>
         Promise.resolve(where.id === job.id ? snapshot() : null),
       ),
+      findMany: vi.fn(
+        ({
+          where,
+        }: {
+          where: Where & { expiresAt: { gt: Date }; items: { some: Where } };
+        }) =>
+          Promise.resolve(
+            matches(job, { status: where.status }) &&
+              job.expiresAt > where.expiresAt.gt &&
+              items.some((item) => matches(item, where.items.some))
+              ? [{ id: job.id }]
+              : [],
+          ),
+      ),
       updateMany: vi.fn(
         ({ where, data }: { where: Where; data: Record<string, unknown> }) => {
           const hit = matches(job, where);
@@ -276,6 +296,17 @@ function jobHarness(
       ),
     },
     downloadJobItem: {
+      findMany: vi.fn(({ where }: { where: Where }) =>
+        Promise.resolve(
+          items
+            .filter((item) => matches(item, where))
+            .sort((a, b) => a.episodeNumber - b.episodeNumber)
+            .map((item) => ({
+              id: item.id,
+              episode: { number: item.episodeNumber },
+            })),
+        ),
+      ),
       updateMany: vi.fn(
         ({ where, data }: { where: Where; data: Record<string, unknown> }) => {
           const hits = items.filter((item) => matches(item, where));
@@ -438,5 +469,79 @@ describe('DownloadJobsService job state races', () => {
     expect(partial.itemStatus(1)).toBe(DownloadJobItemStatus.COMPLETED);
     expect(partial.itemStatus(2)).toBe(DownloadJobItemStatus.RUNNING);
     expect(partial.job.status).toBe(DownloadJobStatus.RUNNING);
+  });
+});
+
+describe('DownloadJobsService recovery of a dead worker', () => {
+  const abandoned = () => new Date(Date.now() - ITEM_LEASE_MS - 60_000);
+
+  it('resumes the items a dead worker left RUNNING, not those of a live one', async () => {
+    const h = jobHarness([1, 2, 3], DownloadJobStatus.RUNNING);
+    Object.assign(h.items[0], {
+      status: DownloadJobItemStatus.RUNNING,
+      updatedAt: abandoned(),
+    });
+    h.items[1].status = DownloadJobItemStatus.RUNNING;
+
+    const run = h.process();
+    await h.sources.started(1);
+    await h.sources.started(3);
+    h.sources.finish(1);
+    h.sources.finish(3);
+    await run;
+
+    expect(
+      h.sources.resolver.resolveEpisode.mock.calls.map((call) => call[2]),
+    ).toEqual([1, 3]);
+    expect(h.itemStatus(1)).toBe(DownloadJobItemStatus.COMPLETED);
+    expect(h.itemStatus(2)).toBe(DownloadJobItemStatus.RUNNING);
+    expect(h.items[0].attempts).toBe(1);
+  });
+
+  it('requeues interrupted jobs when the worker starts', async () => {
+    const h = jobHarness([1, 2], DownloadJobStatus.RUNNING);
+    Object.assign(h.items[0], {
+      status: DownloadJobItemStatus.RUNNING,
+      updatedAt: abandoned(),
+    });
+    const boss = { work: vi.fn(), send: vi.fn() };
+    const queue = { open: vi.fn(() => Promise.resolve(boss)) };
+    const service = new DownloadJobsService(
+      h.prisma as unknown as PrismaService,
+      {} as AnimeService,
+      h.sources.resolver as unknown as DownloadResolverService,
+      queue as unknown as JobQueue,
+    );
+
+    await service.onModuleInit();
+
+    expect(boss.work).toHaveBeenCalledOnce();
+    expect(boss.send).toHaveBeenCalledExactlyOnceWith(
+      'animehub-download-job',
+      { jobId: h.job.id },
+      { group: { id: 'bulk' } },
+    );
+  });
+
+  it.each([
+    ['only live items', DownloadJobStatus.RUNNING, new Date()],
+    ['a finished job', DownloadJobStatus.PARTIAL, abandoned()],
+  ])('leaves a job with %s alone', async (_, status, updatedAt) => {
+    const h = jobHarness([1], status);
+    Object.assign(h.items[0], {
+      status: DownloadJobItemStatus.RUNNING,
+      updatedAt,
+    });
+    const boss = { work: vi.fn(), send: vi.fn() };
+    const service = new DownloadJobsService(
+      h.prisma as unknown as PrismaService,
+      {} as AnimeService,
+      {} as DownloadResolverService,
+      { open: () => Promise.resolve(boss) } as unknown as JobQueue,
+    );
+
+    await service.onModuleInit();
+
+    expect(boss.send).not.toHaveBeenCalled();
   });
 });

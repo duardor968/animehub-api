@@ -46,6 +46,15 @@ const UNFINISHED_ITEM_STATUSES: DownloadJobItemStatus[] = [
 const JOB_LIFETIME_MS = 24 * 60 * 60_000;
 // Bounds the tokens stored for one job; each POST is rate limited as well.
 const MAX_IDEMPOTENT_REPLAYS = 10;
+// An item resolves within a minute (one source request, bounded retries). One
+// RUNNING for longer was left by a worker that died; a newer one may belong to
+// another live instance, such as the old one during a rolling deploy.
+export const ITEM_LEASE_MS = 5 * 60_000;
+
+const abandonedItems = () => ({
+  status: DownloadJobItemStatus.RUNNING,
+  updatedAt: { lt: new Date(Date.now() - ITEM_LEASE_MS) },
+});
 
 function sha256(value: string) {
   return createHash('sha256').update(value).digest('hex');
@@ -111,13 +120,25 @@ export class DownloadJobsService implements OnModuleInit {
       policy: 'standard',
       notify: true,
     });
-    await this.boss?.work<{ jobId: string }>(
+    if (!this.boss) return;
+    await this.boss.work<{ jobId: string }>(
       QUEUE_NAME,
       { localConcurrency: 2, groupConcurrency: 2, pollingIntervalSeconds: 1 },
       async (jobs) => {
         for (const job of jobs) await this.process(job.data.jobId);
       },
     );
+    // Requeue the jobs a dead worker left behind: process() reclaims their
+    // abandoned items. pg-boss alone retries such a job only once it expires.
+    const interrupted = await this.prisma.downloadJob.findMany({
+      where: {
+        status: { in: ACTIVE_JOB_STATUSES },
+        expiresAt: { gt: new Date() },
+        items: { some: abandonedItems() },
+      },
+      select: { id: true },
+    });
+    for (const { id } of interrupted) await this.enqueue(id);
   }
 
   /**
@@ -352,7 +373,7 @@ export class DownloadJobsService implements OnModuleInit {
   private async process(jobId: string) {
     const job = await this.prisma.downloadJob.findUnique({
       where: { id: jobId },
-      include: { anime: true, items: { include: { episode: true } } },
+      include: { anime: true },
     });
     if (
       !job ||
@@ -369,9 +390,15 @@ export class DownloadJobsService implements OnModuleInit {
       },
     });
     if (started.count === 0) return;
-    const pending = job.items.filter(
-      (item) => item.status === DownloadJobItemStatus.PENDING,
-    );
+    await this.prisma.downloadJobItem.updateMany({
+      where: { jobId, ...abandonedItems() },
+      data: { status: DownloadJobItemStatus.PENDING },
+    });
+    const pending = await this.prisma.downloadJobItem.findMany({
+      where: { jobId, status: DownloadJobItemStatus.PENDING },
+      orderBy: { episode: { number: 'asc' } },
+      select: { id: true, episode: { select: { number: true } } },
+    });
     for (let offset = 0; offset < pending.length; offset += 50) {
       const block = pending.slice(offset, offset + 50);
       await Promise.all(
