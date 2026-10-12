@@ -78,6 +78,33 @@ describe('AnimeAv1Service', () => {
     });
   });
 
+  it('maps the source status codes of its catalog filter', async () => {
+    const anime = (id: number, status?: number) => ({
+      id,
+      slug: `anime-${id}`,
+      title: `Anime ${id}`,
+      status,
+      startDate: '1999-10-20',
+    });
+    vi.spyOn(global, 'fetch').mockResolvedValue(
+      routeResponse({
+        featured: [anime(1, 0), anime(2, 1), anime(3, 2), anime(4)],
+        latestEpisodes: [],
+        latestMedia: [],
+      }),
+    );
+
+    const { featured } = await service.getHome();
+
+    // 1 is "Próximamente" even for a series that started long ago.
+    expect(featured.map((entry) => entry.status)).toEqual([
+      'FINISHED',
+      'UPCOMING',
+      'AIRING',
+      'UNKNOWN',
+    ]);
+  });
+
   it('keeps only supported providers and audio variants', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue(
       routeResponse({

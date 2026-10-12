@@ -485,11 +485,14 @@ export class AnimeAv1Service {
     };
   }
 
+  // The codes behind the catalog filter: finalizado 0, proximamente 1, emision
+  // 2. A running series between seasons is 1 too: "Próximamente" on its page.
   private normalizeStatus(
     status: number | undefined,
     startDate?: string | null,
   ): SourceStatus {
     if (status === 0) return 'FINISHED';
+    if (status === 1) return 'UPCOMING';
     if (status === 2) return 'AIRING';
     const startsAt = this.toDate(startDate);
     if (startsAt && startsAt > new Date()) return 'UPCOMING';
