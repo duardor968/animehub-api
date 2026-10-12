@@ -2,22 +2,20 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  Logger,
-  OnModuleDestroy,
   OnModuleInit,
   UnauthorizedException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'node:crypto';
 import pLimit from 'p-limit';
-import { PgBoss } from 'pg-boss';
+import type { PgBoss } from 'pg-boss';
 import {
   DownloadJobItemStatus,
   DownloadJobStatus,
   Prisma,
 } from '../generated/prisma/client';
 import { AnimeService } from '../anime/anime.service';
+import { JobQueue } from '../jobs/job-queue';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateDownloadJobDto,
@@ -97,47 +95,29 @@ function isUniqueViolation(error: unknown) {
 }
 
 @Injectable()
-export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(DownloadJobsService.name);
+export class DownloadJobsService implements OnModuleInit {
   private readonly episodeLimit = pLimit(8);
-  private boss?: PgBoss;
+  private boss: PgBoss | null = null;
 
   constructor(
-    private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly animeService: AnimeService,
     private readonly resolver: DownloadResolverService,
+    private readonly queue: JobQueue,
   ) {}
 
   async onModuleInit() {
-    if (this.config.get<string>('JOBS_ENABLED', 'true') === 'false') return;
-    const connectionString = this.config.getOrThrow<string>('DATABASE_URL');
-    // Scope pg-boss to our own schema on the shared Postgres (from ?schema= in the
-    // URL) so its tables don't collide with other projects' pg-boss. Absent
-    // (local dev) → pg-boss default schema.
-    const schemaMatch = /[?&]schema=([^&]+)/.exec(connectionString);
-    this.boss = new PgBoss({
-      connectionString,
-      application_name: 'animehub-api',
-      ...(schemaMatch ? { schema: decodeURIComponent(schemaMatch[1]) } : {}),
-    });
-    this.boss.on('error', (error) => this.logger.error(error.message));
-    await this.boss.start();
-    await this.boss.createQueue(QUEUE_NAME, {
+    this.boss = await this.queue.open(QUEUE_NAME, {
       policy: 'standard',
       notify: true,
     });
-    await this.boss.work<{ jobId: string }>(
+    await this.boss?.work<{ jobId: string }>(
       QUEUE_NAME,
       { localConcurrency: 2, groupConcurrency: 2, pollingIntervalSeconds: 1 },
       async (jobs) => {
         for (const job of jobs) await this.process(job.data.jobId);
       },
     );
-  }
-
-  async onModuleDestroy() {
-    await this.boss?.stop({ graceful: true });
   }
 
   /**
@@ -200,15 +180,7 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
       }
       throw error;
     }
-    if (this.boss) {
-      await this.boss.send(
-        QUEUE_NAME,
-        { jobId: job.id },
-        { group: { id: 'bulk' } },
-      );
-    } else {
-      void this.process(job.id);
-    }
+    await this.enqueue(job.id);
     return {
       data: {
         jobId: job.id,
@@ -364,10 +336,15 @@ export class DownloadJobsService implements OnModuleInit, OnModuleDestroy {
       if (reset.count === 0)
         throw new BadRequestException('The job has no failed episodes.');
     });
+    await this.enqueue(jobId);
+    return this.get(jobId, token);
+  }
+
+  // Without workers (JOBS_ENABLED=false) the job runs in this process.
+  private async enqueue(jobId: string) {
     if (this.boss) {
       await this.boss.send(QUEUE_NAME, { jobId }, { group: { id: 'bulk' } });
     } else void this.process(jobId);
-    return this.get(jobId, token);
   }
 
   // Every write below is guarded on the state it expects, so a concurrent

@@ -1,7 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { vi } from 'vitest';
 import { AnimeService } from '../anime/anime.service';
+import { JobQueue } from '../jobs/job-queue';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   DownloadJobItemStatus,
@@ -54,10 +54,10 @@ function harness(numbers: number[]) {
     ),
   };
   const service = new DownloadJobsService(
-    new ConfigService({ JOBS_ENABLED: 'false' }),
     prisma as unknown as PrismaService,
     animeService as unknown as AnimeService,
     {} as DownloadResolverService,
+    {} as JobQueue,
   );
   const create = (input: Partial<CreateDownloadJobDto>) =>
     service.create('one-piece', {
@@ -293,10 +293,10 @@ function jobHarness(
   };
   const sources = deferredResolver();
   const service = new DownloadJobsService(
-    new ConfigService({ JOBS_ENABLED: 'false' }),
     prisma as unknown as PrismaService,
     {} as AnimeService,
     sources.resolver as unknown as DownloadResolverService,
+    {} as JobQueue,
   );
   const process = () =>
     (service as unknown as { process(id: string): Promise<void> }).process(

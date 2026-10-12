@@ -4,10 +4,10 @@ import {
   ConflictException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { vi } from 'vitest';
 import { AnimeService } from '../anime/anime.service';
 import { Prisma } from '../generated/prisma/client';
+import { JobQueue } from '../jobs/job-queue';
 import { PrismaService } from '../prisma/prisma.service';
 import { DownloadJobsController } from './download-jobs.controller';
 import {
@@ -151,10 +151,10 @@ function harness(numbers = [1, 2, 3]) {
     ),
   };
   const service = new DownloadJobsService(
-    new ConfigService({ JOBS_ENABLED: 'false' }),
     prisma as unknown as PrismaService,
     animeService as unknown as AnimeService,
     {} as DownloadResolverService,
+    {} as JobQueue,
   );
   const create = (input: Partial<CreateDownloadJobDto>, key?: string) =>
     service.create(

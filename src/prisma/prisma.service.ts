@@ -3,6 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';
 
+/** The ?schema= of a connection string, if any. */
+export function databaseSchema(connectionString: string) {
+  const match = /[?&]schema=([^&]+)/.exec(connectionString);
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
 // Home uses a separate, small pool with strict read/job deadlines. Other API
 // workflows keep their existing pool and are not delayed by home refreshes.
 export function createPrismaAdapter(
@@ -16,8 +22,7 @@ export function createPrismaAdapter(
   } = {},
 ) {
   const connectionString = config.getOrThrow<string>('DATABASE_URL');
-  const schemaMatch = /[?&]schema=([^&]+)/.exec(connectionString);
-  const schema = schemaMatch ? decodeURIComponent(schemaMatch[1]) : undefined;
+  const schema = databaseSchema(connectionString);
   return new PrismaPg(
     { connectionString, ...options },
     schema ? { schema } : undefined,
