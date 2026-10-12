@@ -52,6 +52,7 @@ Swagger queda en `http://localhost:8000/docs` y el contrato en `http://localhost
 | ------------------- | -------------------------------------------------------------------------------------- |
 | `DATABASE_URL`      | Conexión a PostgreSQL, incluida la persistencia de los trabajos.                       |
 | `PORT`              | Puerto HTTP; por defecto, `8000`.                                                      |
+| `HOST`              | Dirección de escucha: `127.0.0.1` en el ejemplo local; por defecto, `0.0.0.0`.         |
 | `CORS_ORIGINS`      | Orígenes permitidos, separados por comas. En local: `http://localhost:3000`.           |
 | `ANIMEAV1_BASE_URL` | Origen de la fuente; por defecto, `https://animeav1.com`.                              |
 | `SOURCE_USER_AGENT` | Identificación de las solicitudes a la fuente.                                         |

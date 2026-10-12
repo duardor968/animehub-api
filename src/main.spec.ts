@@ -2,7 +2,9 @@ import { vi } from 'vitest';
 
 const { app, configureApp } = vi.hoisted(() => ({
   app: {
-    get: vi.fn(() => ({ get: vi.fn(() => 8000) })),
+    get: vi.fn(() => ({
+      get: vi.fn((key: string) => ({ PORT: 8000, HOST: '127.0.0.1' })[key]),
+    })),
     enableShutdownHooks: vi.fn(),
     listen: vi.fn().mockResolvedValue(undefined),
   },
@@ -24,6 +26,6 @@ describe('API bootstrap', () => {
     expect(app.enableShutdownHooks.mock.invocationCallOrder[0]).toBeLessThan(
       app.listen.mock.invocationCallOrder[0],
     );
-    expect(app.listen).toHaveBeenCalledWith(8000, '0.0.0.0');
+    expect(app.listen).toHaveBeenCalledWith(8000, '127.0.0.1');
   });
 });

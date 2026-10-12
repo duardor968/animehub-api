@@ -5,6 +5,7 @@ const environmentSchema = z.object({
     .enum(['development', 'test', 'production'])
     .default('development'),
   PORT: z.coerce.number().int().min(1).max(65_535).default(8000),
+  HOST: z.string().trim().min(1).default('0.0.0.0'),
   DATABASE_URL: z.url(),
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
   ANIMEAV1_BASE_URL: z.url().default('https://animeav1.com'),
