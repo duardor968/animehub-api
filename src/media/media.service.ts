@@ -44,6 +44,8 @@ const SETTINGS = [
 
 /** A failure that retrying cannot fix: no such image, or not a usable one. */
 class UnusableSourceError extends Error {}
+/** The source has no such image. */
+class MissingSourceError extends UnusableSourceError {}
 
 function isSourceImage(value: unknown): value is string {
   return typeof value === 'string' && SOURCE_IMAGE.test(value);
@@ -162,8 +164,9 @@ export class MediaService implements OnModuleInit {
 
   /**
    * Points the source image fields of a response at their WebP copies, in
-   * place, with one lookup for the whole response. Images without a ready
-   * copy keep their source URL and are queued for conversion.
+   * place, with one lookup for the whole response. An image the source does
+   * not have becomes null; any other without a ready copy keeps its source
+   * URL. Both are queued for conversion when due.
    */
   async localize<T>(body: T): Promise<T> {
     if (!this.storage) return body;
@@ -189,6 +192,7 @@ export class MediaService implements OnModuleInit {
     for (const owner of owners) {
       for (const field of IMAGE_FIELDS) {
         const asset = assets.get(owner[field] as string);
+        if (asset?.status === MediaAssetStatus.MISSING) owner[field] = null;
         if (asset?.status !== MediaAssetStatus.READY) continue;
         owner[field] = this.url(asset, asset.widths.at(-1)!);
         if (field === 'backdropUrl') {
@@ -234,7 +238,7 @@ export class MediaService implements OnModuleInit {
         await response.body?.cancel();
         const message = `Source answered ${response.status}`;
         throw [403, 404, 410].includes(response.status)
-          ? new UnusableSourceError(message)
+          ? new MissingSourceError(message)
           : new Error(message);
       }
       const input = await readBody(response, MAX_SOURCE_BYTES);
@@ -283,11 +287,19 @@ export class MediaService implements OnModuleInit {
         update: data,
       });
     } catch (error) {
+      const status =
+        error instanceof MissingSourceError
+          ? MediaAssetStatus.MISSING
+          : MediaAssetStatus.FAILED;
       // A ready copy stays in use; the failure only postpones the next check.
       await this.prisma.mediaAsset.upsert({
         where: { sourceUrl },
-        create: { sourceUrl, status: MediaAssetStatus.FAILED, failures: 1 },
-        update: { failures: { increment: 1 }, checkedAt },
+        create: { sourceUrl, status, failures: 1 },
+        update: {
+          failures: { increment: 1 },
+          checkedAt,
+          ...(asset?.status === MediaAssetStatus.READY ? {} : { status }),
+        },
       });
       this.logger.warn(`Image ${sourceUrl} not converted: ${String(error)}`);
       // Anything else is transient: pg-boss retries it with backoff.

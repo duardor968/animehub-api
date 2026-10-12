@@ -71,7 +71,7 @@ Mantén `.env` fuera de Git. La Web no necesita conocer `DATABASE_URL`.
 
 ### Imágenes
 
-La API sirve las imágenes de AnimeAV1 (pósters, fondos y capturas) como WebP desde su propio bucket. Las convierte bajo demanda: la primera respuesta que incluye una imagen devuelve la URL de AnimeAV1 y encola su conversión; cuando la copia está lista, las respuestas apuntan a ella. Los fondos se guardan en 640, 1280 y 1900 px de ancho y se ofrecen también en `backdropSrcSet`. Cada objeto lleva `Cache-Control: public, max-age=31536000, immutable`, y su URL cambia si cambia la imagen de origen.
+La API sirve las imágenes de AnimeAV1 (pósters, fondos y capturas) como WebP desde su propio bucket. Las convierte bajo demanda: la primera respuesta que incluye una imagen devuelve la URL de AnimeAV1 y encola su conversión; cuando la copia está lista, las respuestas apuntan a ella. Los fondos se guardan en 640, 1280 y 1900 px de ancho y se ofrecen también en `backdropSrcSet`. Cada objeto lleva `Cache-Control: public, max-age=31536000, immutable`, y su URL cambia si cambia la imagen de origen. Si AnimeAV1 no tiene una imagen (403 o 404), el campo llega a `null` y se vuelve a comprobar al cabo de un día.
 
 Sin las seis variables `MEDIA_*`, la API sigue devolviendo las URL de AnimeAV1; con `JOBS_ENABLED=false` solo sirve las copias ya convertidas. En local sirve cualquier almacenamiento compatible con S3, como MinIO en `http://127.0.0.1:9000` con el bucket `animehub-media` de lectura pública y `MEDIA_PUBLIC_URL=http://127.0.0.1:9000/animehub-media`.
 

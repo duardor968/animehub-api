@@ -1282,12 +1282,12 @@
           "posterUrl": {
             "type": "string",
             "nullable": true,
-            "description": "Our WebP copy, cached for a year, once converted; until then, the source image."
+            "description": "Our WebP copy, cached for a year, once converted; until then, the source image. null while the source has no such image (checked again daily)."
           },
           "backdropUrl": {
             "type": "string",
             "nullable": true,
-            "description": "Our WebP copy, cached for a year, once converted; until then, the source image. The WebP copy is the widest in backdropSrcSet."
+            "description": "Our WebP copy, cached for a year, once converted; until then, the source image. null while the source has no such image (checked again daily). The WebP copy is the widest in backdropSrcSet."
           },
           "backdropSrcSet": {
             "type": "string",
@@ -1351,12 +1351,12 @@
           "posterUrl": {
             "type": "string",
             "nullable": true,
-            "description": "Our WebP copy, cached for a year, once converted; until then, the source image."
+            "description": "Our WebP copy, cached for a year, once converted; until then, the source image. null while the source has no such image (checked again daily)."
           },
           "backdropUrl": {
             "type": "string",
             "nullable": true,
-            "description": "Our WebP copy, cached for a year, once converted; until then, the source image. The WebP copy is the widest in backdropSrcSet."
+            "description": "Our WebP copy, cached for a year, once converted; until then, the source image. null while the source has no such image (checked again daily). The WebP copy is the widest in backdropSrcSet."
           },
           "backdropSrcSet": {
             "type": "string",
@@ -1402,7 +1402,7 @@
           "imageUrl": {
             "type": "string",
             "nullable": true,
-            "description": "Our WebP copy, cached for a year, once converted; until then, the source image."
+            "description": "Our WebP copy, cached for a year, once converted; until then, the source image. null while the source has no such image (checked again daily)."
           },
           "publishedAt": {
             "type": "string",
@@ -1613,12 +1613,12 @@
           "posterUrl": {
             "type": "string",
             "nullable": true,
-            "description": "Our WebP copy, cached for a year, once converted; until then, the source image."
+            "description": "Our WebP copy, cached for a year, once converted; until then, the source image. null while the source has no such image (checked again daily)."
           },
           "backdropUrl": {
             "type": "string",
             "nullable": true,
-            "description": "Our WebP copy, cached for a year, once converted; until then, the source image. The WebP copy is the widest in backdropSrcSet."
+            "description": "Our WebP copy, cached for a year, once converted; until then, the source image. null while the source has no such image (checked again daily). The WebP copy is the widest in backdropSrcSet."
           },
           "backdropSrcSet": {
             "type": "string",

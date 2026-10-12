@@ -295,9 +295,11 @@ model DownloadJobItem {
   @@index([jobId, status])
 }
 
+// MISSING: the source answered that it has no such image (403/404/410).
 enum MediaAssetStatus {
   READY
   FAILED
+  MISSING
 }
 
 // A source image converted to WebP and stored in our bucket, one object per

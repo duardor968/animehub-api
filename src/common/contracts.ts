@@ -6,7 +6,7 @@ import {
 import { RELATION_KINDS } from '../source/source.types';
 
 const IMAGE_URL_DESCRIPTION =
-  'Our WebP copy, cached for a year, once converted; until then, the source image.';
+  'Our WebP copy, cached for a year, once converted; until then, the source image. null while the source has no such image (checked again daily).';
 
 export class CategoryDto {
   @ApiProperty() id!: string;

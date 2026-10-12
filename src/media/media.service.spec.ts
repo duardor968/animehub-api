@@ -171,6 +171,40 @@ describe('MediaService.localize', () => {
     expect(h.boss.insert).not.toHaveBeenCalled();
   });
 
+  it('answers null for images the source does not have, rechecked daily', async () => {
+    const h = harness();
+    await h.service.onModuleInit();
+    const missing = (path: string, hoursAgo: number) => ({
+      sourceUrl: `${CDN}/${path}.jpg`,
+      status: MediaAssetStatus.MISSING,
+      version: null,
+      widths: [],
+      checkedAt: new Date(Date.now() - hoursAgo * 60 * 60_000),
+    });
+    h.prisma.mediaAsset.findMany.mockResolvedValue([
+      missing('backdrops/42', 1),
+      missing('screenshots/42/12.5', 25),
+    ]);
+
+    const body = await h.service.localize(response());
+
+    for (const { anime, episode } of body.data) {
+      expect(anime).toMatchObject({
+        posterUrl: `${CDN}/covers/42.jpg`,
+        backdropUrl: null,
+        backdropSrcSet: null,
+      });
+      expect(episode.imageUrl).toBeNull();
+    }
+    // The cover has no row yet; the screenshot's absence is a day old.
+    await vi.waitFor(() => expect(h.boss.insert).toHaveBeenCalledOnce());
+    expect(
+      (
+        h.boss.insert.mock.calls[0] as [string, { singletonKey: string }[]]
+      )[1].map((job) => job.singletonKey),
+    ).toEqual([`${CDN}/covers/42.jpg`, `${CDN}/screenshots/42/12.5.jpg`]);
+  });
+
   it('ignores URLs that are not source images', async () => {
     const h = harness();
     await h.service.onModuleInit();
@@ -245,11 +279,36 @@ describe('MediaService.convert', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(send).not.toHaveBeenCalled();
-    expect(h.prisma.mediaAsset.upsert).toHaveBeenCalledTimes(2);
-    expect(lastUpsert(h)).toMatchObject({
-      create: { status: MediaAssetStatus.FAILED, failures: 1 },
-      update: { failures: { increment: 1 } },
+    const [missing, outage] = h.prisma.mediaAsset.upsert.mock.calls.map(
+      ([args]) => args as { create: object; update: object },
+    );
+    expect(missing).toMatchObject({
+      create: { status: MediaAssetStatus.MISSING, failures: 1 },
+      update: { status: MediaAssetStatus.MISSING, failures: { increment: 1 } },
     });
+    expect(outage).toMatchObject({
+      create: { status: MediaAssetStatus.FAILED },
+      update: { status: MediaAssetStatus.FAILED },
+    });
+  });
+
+  it('keeps serving a ready copy the source no longer has', async () => {
+    const h = harness();
+    h.prisma.mediaAsset.findUnique.mockResolvedValue({
+      sourceUrl: `${CDN}/covers/42.jpg`,
+      status: MediaAssetStatus.READY,
+      etag: '"abc"',
+    });
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 404 }));
+
+    await h.service.convert(`${CDN}/covers/42.jpg`);
+
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
+      'if-none-match': '"abc"',
+    });
+    expect(lastUpsert(h).update).not.toHaveProperty('status');
   });
 
   it('refuses anything but a source image', async () => {
