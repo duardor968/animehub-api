@@ -2,10 +2,6 @@ import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HomeService } from './home.service';
 import { HOME_RETRY_INTERVAL_MS } from './home-policy';
-export {
-  HOME_FULL_REFRESH_INTERVAL_MS,
-  HOME_RECENT_REFRESH_INTERVAL_MS,
-} from './home-policy';
 
 @Injectable()
 export class HomeRefreshScheduler implements OnModuleInit, OnModuleDestroy {

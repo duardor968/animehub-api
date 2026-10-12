@@ -120,18 +120,17 @@ export class DownloadResolverService {
     providers: ProviderDto[],
     forceRefresh = false,
   ): Promise<ResolvedEpisodeDto> {
+    const notFound: ResolvedEpisodeDto = {
+      episodeNumber: number,
+      audio: requestedAudio,
+      links: [],
+      errorCode: 'EPISODE_NOT_FOUND',
+    };
     const episode = await this.prisma.episode.findUnique({
       where: { animeId_number: { animeId, number } },
       include: { links: true, downloadProbe: true },
     });
-    if (!episode) {
-      return {
-        episodeNumber: number,
-        audio: requestedAudio,
-        links: [],
-        errorCode: 'EPISODE_NOT_FOUND',
-      };
-    }
+    if (!episode) return notFound;
     const now = new Date();
     let links = episode.links.filter((link) => link.expiresAt > now);
     if (
@@ -145,12 +144,7 @@ export class DownloadResolverService {
       } catch (error) {
         if (!(error instanceof AnimeAv1NotFoundError)) throw error;
         // Known locally but gone at the source (renumbered or removed).
-        return {
-          episodeNumber: number,
-          audio: requestedAudio,
-          links: [],
-          errorCode: 'EPISODE_NOT_FOUND',
-        };
+        return notFound;
       }
       const ttl = linkTtlMinutes(
         episode.publishedAt,

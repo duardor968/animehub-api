@@ -281,7 +281,6 @@ export class AnimeAv1Service {
       await this.fetchRoute('/horario'),
       '/horario',
     );
-    // Keep entries without an episode; the projection can use a known timestamp.
     return data.media.map((anime) => ({
       anime: this.normalizeAnime(anime),
       episode: anime.latestEpisode
@@ -364,15 +363,14 @@ export class AnimeAv1Service {
           }
           const body: unknown = await response.json();
           this.throwIfErrorNode(body, path);
-          const envelope = envelopeSchema.parse(body);
+          const { nodes } = envelopeSchema.parse(body);
           // The route's own node is the last one (layouts come first).
           this.throwIfErrorNode(
-            [...envelope.nodes].reverse().find((value) => value != null),
+            nodes.findLast((value) => value != null),
             path,
           );
-          const node = [...envelope.nodes]
-            .reverse()
-            .find((value): value is { type: 'data'; data: unknown[] } =>
+          const node = nodes.findLast(
+            (value): value is { type: 'data'; data: unknown[] } =>
               Boolean(
                 value &&
                 typeof value === 'object' &&
@@ -381,7 +379,7 @@ export class AnimeAv1Service {
                 'data' in value &&
                 Array.isArray(value.data),
               ),
-            );
+          );
           if (!node) throw new AnimeAv1UnavailableError('Missing route data');
           return unflatten(node.data) as unknown;
         } catch (error) {

@@ -4,7 +4,10 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient, Prisma } from '../generated/prisma/client';
 import { SnapshotKind } from '../generated/prisma/enums';
 import { createPrismaAdapter } from '../prisma/prisma.service';
-import { ProjectionService } from '../projection/projection.service';
+import {
+  latestEpisodeUpdate,
+  ProjectionService,
+} from '../projection/projection.service';
 import type { SourceHome, SourceAnimeDetail } from '../source/source.types';
 import {
   HOME_FULL_REFRESH_INTERVAL_MS,
@@ -162,19 +165,15 @@ export class HomeStore implements OnModuleDestroy {
         ) => {
           if (!entries.length) return;
           signal.throwIfAborted();
+          const data = {
+            kind,
+            fetchedAt,
+            nextRefreshAt: new Date(fetchedAt.getTime() + ttl),
+          };
           const snapshot = await tx.snapshot.upsert({
             where: { key },
-            update: {
-              kind,
-              fetchedAt,
-              nextRefreshAt: new Date(fetchedAt.getTime() + ttl),
-            },
-            create: {
-              key,
-              kind,
-              fetchedAt,
-              nextRefreshAt: new Date(fetchedAt.getTime() + ttl),
-            },
+            update: data,
+            create: { key, ...data },
           });
           await tx.snapshotItem.deleteMany({
             where: { snapshotId: snapshot.id },
@@ -216,18 +215,9 @@ export class HomeStore implements OnModuleDestroy {
             tx,
           );
           if (item.episode.publishedAt) {
-            await tx.anime.updateMany({
-              where: {
-                id: anime.id,
-                OR: [
-                  { latestEpisodePublishedAt: null },
-                  {
-                    latestEpisodePublishedAt: { lt: item.episode.publishedAt },
-                  },
-                ],
-              },
-              data: { latestEpisodePublishedAt: item.episode.publishedAt },
-            });
+            await tx.anime.updateMany(
+              latestEpisodeUpdate(anime.id, item.episode.publishedAt),
+            );
           }
           episodes.push({ animeId: anime.id, episodeId: episode.id });
         }

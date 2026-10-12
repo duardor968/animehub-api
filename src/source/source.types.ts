@@ -6,8 +6,6 @@ export interface SourceCategory {
   slug: string;
 }
 
-export type SourceGenre = SourceCategory;
-
 export interface SourceAnimeSummary {
   id: string;
   slug: string;
@@ -16,7 +14,7 @@ export interface SourceAnimeSummary {
   posterUrl: string;
   backdropUrl: string;
   category: SourceCategory | null;
-  genres: SourceGenre[];
+  genres: SourceCategory[];
   status: SourceStatus;
   startDate: Date | null;
   mature: boolean;
@@ -79,7 +77,7 @@ export interface SourceCatalog {
   totalPages: number;
   totalRecords: number;
   categories: SourceCategory[];
-  genres: SourceGenre[];
+  genres: SourceCategory[];
   years: [number, number];
 }
 

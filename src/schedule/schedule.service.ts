@@ -7,7 +7,10 @@ import { SnapshotKind } from '../generated/prisma/enums';
 import { ScheduleResponseDto } from '../common/contracts';
 import { serializeAnime, serializeEpisode } from '../common/serializers';
 import { PrismaService } from '../prisma/prisma.service';
-import { ProjectionService } from '../projection/projection.service';
+import {
+  latestEpisodeUpdate,
+  ProjectionService,
+} from '../projection/projection.service';
 import { AnimeAv1Service } from '../source/animeav1.service';
 import { SourceEpisode } from '../source/source.types';
 
@@ -268,16 +271,9 @@ export class ScheduleService {
   private async observeEpisode(animeId: string, source: SourceEpisode) {
     const episode = await this.projection.upsertEpisode(animeId, source);
     if (source.publishedAt) {
-      await this.prisma.anime.updateMany({
-        where: {
-          id: animeId,
-          OR: [
-            { latestEpisodePublishedAt: null },
-            { latestEpisodePublishedAt: { lt: source.publishedAt } },
-          ],
-        },
-        data: { latestEpisodePublishedAt: source.publishedAt },
-      });
+      await this.prisma.anime.updateMany(
+        latestEpisodeUpdate(animeId, source.publishedAt),
+      );
     }
     return episode;
   }

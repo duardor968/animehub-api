@@ -1,7 +1,7 @@
 .git
 .github
 **/.env
-**/.next
+**/dist-dev
 **/coverage
 **/dist
 **/node_modules

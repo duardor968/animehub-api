@@ -1,18 +1,38 @@
 import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
-import {
-  AnimeStatus,
-  SnapshotKind,
-  SourceAvailability,
-} from '../generated/prisma/enums';
+import { SnapshotKind, SourceAvailability } from '../generated/prisma/enums';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Prisma } from '../generated/prisma/client';
 import {
   SourceAnimeDetail,
   SourceAnimeSummary,
+  SourceCategory,
   SourceEpisode,
   SourceRelation,
 } from '../source/source.types';
+
+/** Moves an anime's latestEpisodePublishedAt forward, never back. */
+export function latestEpisodeUpdate(animeId: string, publishedAt: Date) {
+  return {
+    where: {
+      id: animeId,
+      OR: [
+        { latestEpisodePublishedAt: null },
+        { latestEpisodePublishedAt: { lt: publishedAt } },
+      ],
+    },
+    data: { latestEpisodePublishedAt: publishedAt },
+  };
+}
+
+/** Upsert of a category or genre, both keyed by slug. */
+export function bySlug({ id, name, slug }: SourceCategory) {
+  return {
+    where: { slug },
+    update: { sourceId: id, name },
+    create: { sourceId: id, name, slug },
+  };
+}
 
 export function nextAnimeRefresh(
   status: SourceAnimeSummary['status'],
@@ -41,49 +61,36 @@ export class ProjectionService {
     const client = transaction ?? this.prisma;
     const now = new Date();
     const category = source.category
-      ? await client.category.upsert({
-          where: { slug: source.category.slug },
-          update: { sourceId: source.category.id, name: source.category.name },
-          create: {
-            sourceId: source.category.id,
-            name: source.category.name,
-            slug: source.category.slug,
-          },
-        })
+      ? await client.category.upsert(bySlug(source.category))
       : null;
+    const seen = {
+      slug: source.slug,
+      title: source.title,
+      posterUrl: source.posterUrl,
+      backdropUrl: source.backdropUrl,
+      mature: source.mature,
+      sourceUrl: `https://animeav1.com/media/${source.slug}`,
+      lastSeenAt: now,
+    };
     const anime = await client.anime.upsert({
       where: { sourceId: source.id },
+      // A summary missing a field keeps the stored value.
       update: {
-        slug: source.slug,
-        title: source.title,
+        ...seen,
         synopsis: source.synopsis ?? undefined,
-        posterUrl: source.posterUrl,
-        backdropUrl: source.backdropUrl,
-        status:
-          source.status === 'UNKNOWN'
-            ? undefined
-            : (source.status as AnimeStatus),
+        status: source.status === 'UNKNOWN' ? undefined : source.status,
         availability: SourceAvailability.AVAILABLE,
         categoryId: category?.id,
         startDate: source.startDate ?? undefined,
-        mature: source.mature,
-        sourceUrl: `https://animeav1.com/media/${source.slug}`,
-        lastSeenAt: now,
         notFoundCount: 0,
       },
       create: {
+        ...seen,
         sourceId: source.id,
-        slug: source.slug,
-        title: source.title,
         synopsis: source.synopsis,
-        posterUrl: source.posterUrl,
-        backdropUrl: source.backdropUrl,
         status: source.status,
         categoryId: category?.id ?? null,
         startDate: source.startDate,
-        mature: source.mature,
-        sourceUrl: `https://animeav1.com/media/${source.slug}`,
-        lastSeenAt: now,
         lastFetchedAt: now,
         nextRefreshAt: nextAnimeRefresh(source.status, now),
       },
@@ -91,17 +98,7 @@ export class ProjectionService {
 
     if (source.genres.length > 0) {
       const genres = await Promise.all(
-        source.genres.map((genre) =>
-          client.genre.upsert({
-            where: { slug: genre.slug },
-            update: { sourceId: genre.id, name: genre.name },
-            create: {
-              sourceId: genre.id,
-              name: genre.name,
-              slug: genre.slug,
-            },
-          }),
-        ),
+        source.genres.map((genre) => client.genre.upsert(bySlug(genre))),
       );
       const replaceGenres = async (tx: Prisma.TransactionClient) => {
         await tx.animeGenre.deleteMany({ where: { animeId: anime.id } });
@@ -226,28 +223,20 @@ export class ProjectionService {
     // atomic unit: readers can observe either the previous complete version or
     // the new complete version, never new freshness metadata with old/empty rows.
     const now = options.fetchedAt ?? new Date();
+    const data = {
+      kind,
+      fetchedAt: now,
+      nextRefreshAt: new Date(now.getTime() + options.ttlMinutes * 60_000),
+      totalPages: options.totalPages,
+      totalRecords: options.totalRecords,
+      minYear: options.minYear,
+      maxYear: options.maxYear,
+    };
     return this.prisma.$transaction(async (transaction) => {
       const snapshot = await transaction.snapshot.upsert({
         where: { key },
-        update: {
-          kind,
-          fetchedAt: now,
-          nextRefreshAt: new Date(now.getTime() + options.ttlMinutes * 60_000),
-          totalPages: options.totalPages,
-          totalRecords: options.totalRecords,
-          minYear: options.minYear,
-          maxYear: options.maxYear,
-        },
-        create: {
-          key,
-          kind,
-          fetchedAt: now,
-          nextRefreshAt: new Date(now.getTime() + options.ttlMinutes * 60_000),
-          totalPages: options.totalPages,
-          totalRecords: options.totalRecords,
-          minYear: options.minYear,
-          maxYear: options.maxYear,
-        },
+        update: data,
+        create: { key, ...data },
       });
       await transaction.snapshotItem.deleteMany({
         where: { snapshotId: snapshot.id },

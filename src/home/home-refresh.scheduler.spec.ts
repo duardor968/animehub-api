@@ -1,12 +1,12 @@
 import { ConfigService } from '@nestjs/config';
 import { vi } from 'vitest';
-import {
-  HOME_RECENT_REFRESH_INTERVAL_MS,
-  HOME_FULL_REFRESH_INTERVAL_MS,
-  HomeRefreshScheduler,
-} from './home-refresh.scheduler';
+import { HomeRefreshScheduler } from './home-refresh.scheduler';
 import { HomeService } from './home.service';
-import { HOME_RETRY_INTERVAL_MS } from './home-policy';
+import {
+  HOME_FULL_REFRESH_INTERVAL_MS,
+  HOME_RECENT_REFRESH_INTERVAL_MS,
+  HOME_RETRY_INTERVAL_MS,
+} from './home-policy';
 
 describe('HomeRefreshScheduler', () => {
   afterEach(() => vi.useRealTimers());

@@ -24,9 +24,6 @@ export class ScheduleRefreshScheduler implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    // Gated by the same flag as the download worker so CI and job-less
-    // deployments don't run background work. refresh() is single-flight;
-    // here we drive it independently of visitor traffic.
     if (this.config.get<string>('JOBS_ENABLED', 'true') === 'false') return;
     // Warm on boot so the first visitor usually needs no synchronous refresh.
     this.runRefresh();
@@ -34,7 +31,6 @@ export class ScheduleRefreshScheduler implements OnModuleInit, OnModuleDestroy {
       () => this.runRefresh(),
       SCHEDULE_REFRESH_INTERVAL_MS,
     );
-    // Never keep the process alive just for this heartbeat.
     this.timer.unref?.();
   }
 
