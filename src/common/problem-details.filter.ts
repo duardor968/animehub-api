@@ -14,6 +14,8 @@ import {
   AnimeAv1UnavailableError,
 } from '../source/animeav1.service';
 
+export const RETRY_AFTER_SECONDS = 10;
+
 function hasHttpStatusCode(
   error: unknown,
 ): error is Error & { statusCode: number } {
@@ -103,6 +105,11 @@ export class ProblemDetailsFilter implements ExceptionFilter {
             .replaceAll('_', ' ')
             .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
+    // Every 503 is a dependency that is down or still answering: a refresh the
+    // request started keeps going and stores its data for the retry.
+    if (status === 503) {
+      void response.header('Retry-After', String(RETRY_AFTER_SECONDS));
+    }
     void response
       .header('content-type', 'application/problem+json; charset=utf-8')
       .status(status)

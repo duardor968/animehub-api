@@ -111,6 +111,8 @@ Las rutas de negocio están bajo `/api/v1`:
 
 Las respuestas de negocio usan `data` y, cuando corresponde, `meta`; los errores siguen Problem Details. Consultar o modificar un trabajo exige el token de capacidad que devuelve su creación. Es un token temporal del trabajo, no una sesión de usuario, y debe tratarse como un secreto. Para no perder ese token si se corta la respuesta, envía `Idempotency-Key` al crear el trabajo: repetir la solicitud con la misma clave y el mismo cuerpo devuelve el mismo trabajo con un token nuevo, en lugar de crear otro.
 
+Ninguna consulta espera a AnimeAV1 más de 8 s. Si hay datos guardados, la respuesta los sirve (con `meta.stale` cuando han caducado) mientras se actualizan en segundo plano; si no los hay, responde 503 con `Retry-After`, y la actualización sigue para el siguiente intento.
+
 Cada cliente fija una revisión del contrato y genera sus propios tipos. La API no escribe archivos en el repositorio de la Web. Un cambio incompatible necesita coordinar a los consumidores y, si corresponde, una nueva versión de las rutas.
 
 ## Trabajar en el código

@@ -18,6 +18,7 @@ import {
   isCatalogCapped,
 } from '../source/animeav1.constants';
 import { AnimeAv1Service } from '../source/animeav1.service';
+import { waitForSource } from '../source/source-wait';
 import { CatalogQueryDto } from './catalog-query.dto';
 
 /**
@@ -51,12 +52,13 @@ export class CatalogService {
     const key = this.snapshotKey(params);
     const page = Number(params.get('page') ?? 1);
     let snapshot = await this.loadSnapshot(key);
-    // A cold or degenerate cache waits for the source; a stale one is served
-    // while it refreshes in the background.
+    // A cold or degenerate cache waits for the source, within the request's
+    // deadline; a stale one is served while it refreshes in the background.
     if (!snapshot || this.isDegenerate(snapshot, page)) {
       try {
-        await this.refresh(key, params);
-        snapshot = await this.loadSnapshot(key);
+        if (await waitForSource(this.refresh(key, params))) {
+          snapshot = await this.loadSnapshot(key);
+        }
       } catch {
         // Source unavailable: the check below decides on what is stored.
       }

@@ -12,6 +12,7 @@ import {
   AnimeAv1NotFoundError,
   AnimeAv1Service,
 } from '../source/animeav1.service';
+import { sourceDeadline, waitForSource } from '../source/source-wait';
 
 const detailInclude = {
   category: true,
@@ -21,8 +22,6 @@ const detailInclude = {
     include: { targetAnime: { include: { category: true } } },
   },
 };
-
-export const ANIME_REQUEST_REFRESH_TIMEOUT_MS = 10_000;
 
 @Injectable()
 export class AnimeService {
@@ -36,22 +35,16 @@ export class AnimeService {
   ) {}
 
   async getAnime(slug: string): Promise<AnimeResponseDto> {
-    let anime = await this.prisma.anime.findUnique({
-      where: { slug },
-      include: detailInclude,
-    });
+    const deadline = sourceDeadline();
+    const find = () =>
+      this.prisma.anime.findUnique({ where: { slug }, include: detailInclude });
+    let anime = await find();
     if (!anime) {
-      await this.refresh(slug);
-      anime = await this.prisma.anime.findUnique({
-        where: { slug },
-        include: detailInclude,
-      });
+      await this.fetchUnknown(slug, deadline);
+      anime = await find();
     } else if (!anime.detailFetchedAt) {
-      await this.waitForRefresh(this.refresh(slug), slug);
-      anime = await this.prisma.anime.findUnique({
-        where: { slug },
-        include: detailInclude,
-      });
+      await this.refreshWithin(slug, deadline);
+      anime = await find();
     } else if (anime.nextRefreshAt <= new Date()) {
       this.refreshInBackground(slug, 'expired detail');
     }
@@ -85,13 +78,15 @@ export class AnimeService {
     slug: string,
     page: number,
   ): Promise<EpisodePageResponseDto> {
-    let anime = await this.prisma.anime.findUnique({ where: { slug } });
+    const deadline = sourceDeadline();
+    const find = () => this.prisma.anime.findUnique({ where: { slug } });
+    let anime = await find();
     if (!anime) {
-      await this.refresh(slug);
-      anime = await this.prisma.anime.findUnique({ where: { slug } });
+      await this.fetchUnknown(slug, deadline);
+      anime = await find();
     } else if (!anime.detailFetchedAt) {
-      await this.waitForRefresh(this.refresh(slug), slug);
-      anime = await this.prisma.anime.findUnique({ where: { slug } });
+      await this.refreshWithin(slug, deadline);
+      anime = await find();
     }
     if (!anime) throw new NotFoundException('Anime not found.');
     if (anime.availability === 'UNAVAILABLE') {
@@ -103,7 +98,7 @@ export class AnimeService {
     // normally revalidates stale details in the background, but querying the
     // episode table before that refresh completes recreates the same "first
     // visitor sees the old episode list" bug as Home. Await the existing
-    // single-flight refresh for airing series, with a bounded last-good fallback.
+    // single-flight refresh for airing series, within the same deadline.
     const now = new Date();
     const premiereIsDue =
       anime.status === 'UPCOMING' &&
@@ -111,7 +106,7 @@ export class AnimeService {
       anime.nextEpisodeAt <= now;
     const canStillGainEpisodes = anime.status !== 'FINISHED';
     if (canStillGainEpisodes && (anime.nextRefreshAt <= now || premiereIsDue)) {
-      await this.waitForRefresh(this.refresh(slug), slug);
+      await this.refreshWithin(slug, deadline);
       anime = await this.prisma.anime.findUniqueOrThrow({ where: { slug } });
     }
     const perPage = 50;
@@ -191,31 +186,27 @@ export class AnimeService {
     });
   }
 
-  private async waitForRefresh(promise: Promise<void>, slug: string) {
-    let timer: NodeJS.Timeout | undefined;
-    const outcome = await Promise.race([
-      promise.then(
-        () => ({ kind: 'completed' as const }),
-        (error: unknown) => ({ kind: 'failed' as const, error }),
-      ),
-      new Promise<{ kind: 'timed-out' }>((resolve) => {
-        timer = setTimeout(
-          () => resolve({ kind: 'timed-out' }),
-          ANIME_REQUEST_REFRESH_TIMEOUT_MS,
-        );
-        timer.unref?.();
-      }),
-    ]);
-    if (timer) clearTimeout(timer);
-    if (outcome.kind === 'completed') return;
-    this.logger.warn(
-      outcome.kind === 'timed-out'
-        ? `Episode refresh timed out for ${slug}; serving cached episodes.`
-        : `Episode refresh failed for ${slug}; serving cached episodes: ${
-            outcome.error instanceof Error
-              ? outcome.error.message
-              : String(outcome.error)
-          }`,
-    );
+  // Nothing is stored to answer with: past the deadline the request fails as
+  // an unavailable source would (503), and the refresh fills the cache later.
+  private async fetchUnknown(slug: string, deadline: number) {
+    if (!(await waitForSource(this.refresh(slug), deadline))) {
+      throw new ServiceUnavailableException(
+        'AnimeAV1 is temporarily unavailable.',
+      );
+    }
+  }
+
+  // A stored anime is served as it is when its refresh fails or runs late.
+  private async refreshWithin(slug: string, deadline: number) {
+    try {
+      if (await waitForSource(this.refresh(slug), deadline)) return;
+      this.logger.warn(`Refresh of ${slug} ran late; serving stored data.`);
+    } catch (error) {
+      this.logger.warn(
+        `Refresh failed for ${slug}; serving stored data: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 }

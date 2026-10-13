@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { NestFastifyApplication, RouteConfig } from '@nestjs/platform-fastify';
 import { API_CACHE_CONTROL } from './common/no-store.interceptor';
+import { RETRY_AFTER_SECONDS } from './common/problem-details.filter';
 import { configureApp } from './configure-app';
 import { createFastifyAdapter } from './fastify-adapter';
 import {
@@ -108,6 +109,7 @@ describe('HTTP error mapping through Nest + Fastify', () => {
     const missing = await app.inject({ url: '/api/v1/probe/source-missing' });
 
     expect(down.statusCode).toBe(503);
+    expect(down.headers['retry-after']).toBe(String(RETRY_AFTER_SECONDS));
     expect(down.json()).toMatchObject({
       status: 503,
       detail: 'AnimeAV1 is temporarily unavailable.',

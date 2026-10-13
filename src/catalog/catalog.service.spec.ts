@@ -3,6 +3,7 @@ import { vi } from 'vitest';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectionService } from '../projection/projection.service';
 import { AnimeAv1Service } from '../source/animeav1.service';
+import { SOURCE_WAIT_MS } from '../source/source-wait';
 import type { SourceCatalog } from '../source/source.types';
 import { CatalogService, isDegenerateCatalogPage } from './catalog.service';
 
@@ -194,5 +195,55 @@ describe('CatalogService out-of-range pages', () => {
     expect(prisma.snapshot.findUnique).toHaveBeenCalledTimes(2);
     expect(projection.replaceSnapshot).not.toHaveBeenCalled();
     expect(prisma.category.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('CatalogService source deadline', () => {
+  afterEach(() => vi.useRealTimers());
+
+  function hangingSource(snapshot: object | null) {
+    const prisma = {
+      snapshot: { findUnique: vi.fn(() => Promise.resolve(snapshot)) },
+      category: { findMany: vi.fn(() => Promise.resolve([])) },
+      genre: { findMany: vi.fn(() => Promise.resolve([])) },
+    };
+    const source = { getCatalog: vi.fn(() => new Promise(() => {})) };
+    const service = new CatalogService(
+      prisma as unknown as PrismaService,
+      {} as ProjectionService,
+      source as unknown as AnimeAv1Service,
+    );
+    return { service, source };
+  }
+
+  it('answers 503 at the deadline when nothing is stored', async () => {
+    vi.useFakeTimers();
+    const { service, source } = hangingSource(null);
+
+    const outcome = expect(
+      service.getCatalog({ page: 1, search: 'zombie' }),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await vi.advanceTimersByTimeAsync(SOURCE_WAIT_MS);
+
+    await outcome;
+    expect(source.getCatalog).toHaveBeenCalledOnce();
+  });
+
+  it('serves a stale page at once while it refreshes', async () => {
+    const { service, source } = hangingSource({
+      id: 'stale',
+      items: [],
+      totalPages: 0,
+      totalRecords: 0,
+      minYear: 1990,
+      maxYear: 2026,
+      fetchedAt: new Date(Date.now() - 60 * 60_000),
+      nextRefreshAt: new Date(Date.now() - 30 * 60_000),
+    });
+
+    const response = await service.getCatalog({ page: 1, search: 'zombie' });
+
+    expect(response.meta.stale).toBe(true);
+    expect(source.getCatalog).toHaveBeenCalledOnce();
   });
 });

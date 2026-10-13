@@ -12,6 +12,7 @@ import {
   ProjectionService,
 } from '../projection/projection.service';
 import { AnimeAv1Service } from '../source/animeav1.service';
+import { waitForSource } from '../source/source-wait';
 import { SourceEpisode } from '../source/source.types';
 
 // Bound transient omissions per series, never against a season-wide count.
@@ -86,24 +87,14 @@ export class ScheduleService {
     if (!snapshot || snapshot.nextRefreshAt <= new Date()) {
       // A visitor after expiry should see the refreshed roster, not another
       // stale response. A failing/slow source can still use the stored snapshot.
-      let timer: NodeJS.Timeout | undefined;
       try {
-        await Promise.race([
-          this.refresh(),
-          new Promise<never>((_, reject) => {
-            timer = setTimeout(
-              () => reject(new Error('Schedule refresh timed out')),
-              10_000,
-            );
-            timer.unref?.();
-          }),
-        ]);
+        if (!(await waitForSource(this.refresh()))) {
+          this.logger.warn('Schedule refresh ran late; serving stored data.');
+        }
       } catch (error) {
         this.logger.warn(
           error instanceof Error ? error.message : String(error),
         );
-      } finally {
-        if (timer) clearTimeout(timer);
       }
       snapshot = await this.load();
     }

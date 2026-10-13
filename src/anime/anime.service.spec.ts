@@ -12,6 +12,7 @@ import type {
   SourceEpisode,
   SourceStatus,
 } from '../source/source.types';
+import { SOURCE_WAIT_MS } from '../source/source-wait';
 import { AnimeService } from './anime.service';
 
 const sourceDetail: SourceAnimeDetail = {
@@ -52,6 +53,7 @@ interface HarnessOptions {
   nextRefreshAt?: Date;
   nextEpisodeAt?: Date | null;
   cached?: boolean;
+  detailed?: boolean;
 }
 
 function toEpisodeRecord(episode: SourceEpisode) {
@@ -78,7 +80,8 @@ function createHarness(options: HarnessOptions = {}) {
     startDate: sourceDetail.startDate,
     mature: false,
     availability: 'AVAILABLE',
-    detailFetchedAt: new Date(Date.now() - 20 * 60_000),
+    detailFetchedAt:
+      options.detailed === false ? null : new Date(Date.now() - 20 * 60_000),
     lastFetchedAt: new Date(Date.now() - 20 * 60_000),
     nextRefreshAt: options.nextRefreshAt ?? new Date(Date.now() - 60_000),
     nextEpisodeAt: options.nextEpisodeAt ?? null,
@@ -274,5 +277,43 @@ describe('AnimeService unknown slugs', () => {
     await expect(service.getAnime('one-piece')).rejects.toBeInstanceOf(
       ServiceUnavailableException,
     );
+  });
+});
+
+describe('AnimeService source deadline', () => {
+  afterEach(() => vi.useRealTimers());
+
+  const hanging = () => new Promise<SourceAnimeDetail>(() => {});
+
+  it('answers 503 at the deadline for an anime it has never stored', async () => {
+    vi.useFakeTimers();
+    const { service, source } = createHarness({ cached: false });
+    source.getAnime.mockImplementation(hanging);
+
+    const outcome = expect(
+      service.getAnime('one-piece'),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await vi.advanceTimersByTimeAsync(SOURCE_WAIT_MS);
+
+    await outcome;
+  });
+
+  it('waits once per request even when two refreshes are due', async () => {
+    vi.useFakeTimers();
+    // Known only from a listing, and airing with an expired refresh.
+    const { service, source } = createHarness({ detailed: false });
+    source.getAnime.mockImplementation(hanging);
+    let response: Awaited<ReturnType<AnimeService['getEpisodes']>> | undefined;
+    void service
+      .getEpisodes('airing-show', 1)
+      .then((page) => (response = page));
+
+    await vi.advanceTimersByTimeAsync(SOURCE_WAIT_MS - 1);
+    expect(response).toBeUndefined();
+    // The second wait shares the deadline that just passed.
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(response?.data.map((episode) => episode.number)).toEqual([8]);
+    expect(source.getAnime).toHaveBeenCalledOnce();
   });
 });

@@ -1,5 +1,6 @@
 import { applyDecorators } from '@nestjs/common';
 import { ApiExtraModels, ApiResponse, getSchemaPath } from '@nestjs/swagger';
+import { SOURCE_WAIT_MS } from '../source/source-wait';
 import { ProblemDetailsDto } from './contracts';
 
 export type ProblemStatus = 400 | 401 | 404 | 409 | 422 | 429 | 500 | 503;
@@ -12,7 +13,7 @@ const descriptions: Record<ProblemStatus, string> = {
   422: 'La solicitud contradice otra anterior con la misma clave de idempotencia.',
   429: 'Se superó temporalmente el límite de solicitudes.',
   500: 'El servidor no pudo completar la operación.',
-  503: 'La dependencia necesaria no está disponible.',
+  503: `La dependencia necesaria no está disponible o no respondió a tiempo: a AnimeAV1 se le esperan como máximo ${SOURCE_WAIT_MS / 1000} s.`,
 };
 
 export function ApiProblemResponses(...statuses: ProblemStatus[]) {
@@ -22,7 +23,7 @@ export function ApiProblemResponses(...statuses: ProblemStatus[]) {
       ApiResponse({
         status,
         description: descriptions[status],
-        ...(status === 429
+        ...(status === 429 || status === 503
           ? {
               headers: {
                 'Retry-After': {

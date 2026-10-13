@@ -2,6 +2,7 @@ import { vi } from 'vitest';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectionService } from '../projection/projection.service';
 import { AnimeAv1Service } from '../source/animeav1.service';
+import { SOURCE_WAIT_MS } from '../source/source-wait';
 import { ScheduleService } from './schedule.service';
 
 const now = new Date('2026-09-28T20:00:00Z');
@@ -207,7 +208,7 @@ describe('schedule season rollover and finale publication', () => {
     const h = harness();
     h.source.getSchedule.mockImplementation(() => new Promise(() => {}));
     const result = h.service.getSchedule();
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(SOURCE_WAIT_MS);
     expect((await result).meta.stale).toBe(true);
   });
   it('deduplicates overlapping refreshes', async () => {
