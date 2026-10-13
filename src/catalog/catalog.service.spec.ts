@@ -247,3 +247,26 @@ describe('CatalogService source deadline', () => {
     expect(source.getCatalog).toHaveBeenCalledOnce();
   });
 });
+
+describe('CatalogService suggestions', () => {
+  it('suggests the most popular matches first, eight at most', async () => {
+    const service = new CatalogService(
+      {} as PrismaService,
+      {} as ProjectionService,
+      {} as AnimeAv1Service,
+    );
+    const data = Array.from({ length: 20 }, (_, index) => ({ id: `${index}` }));
+    const getCatalog = vi
+      .spyOn(service, 'getCatalog')
+      .mockResolvedValue({ data } as never);
+
+    const response = await service.getSuggestions(' naru ');
+
+    expect(getCatalog).toHaveBeenCalledWith({
+      page: 1,
+      search: 'naru',
+      order: 'popular',
+    });
+    expect(response.data).toEqual(data.slice(0, 8));
+  });
+});

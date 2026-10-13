@@ -89,7 +89,10 @@ export class CatalogController {
 
   @Get('suggestions')
   @RouteConfig({ rateLimit: { max: 120, timeWindow: '1 minute' } })
-  @ApiOperation({ summary: 'Devuelve hasta ocho sugerencias de búsqueda' })
+  @ApiOperation({
+    summary: 'Devuelve hasta ocho sugerencias de búsqueda',
+    description: 'Las coincidencias más populares primero.',
+  })
   @ApiQuery({
     name: 'q',
     required: true,

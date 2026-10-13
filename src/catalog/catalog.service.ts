@@ -94,7 +94,12 @@ export class CatalogService {
   }
 
   async getSuggestions(query: string): Promise<SuggestionResponseDto> {
-    const response = await this.getCatalog({ page: 1, search: query.trim() });
+    // The source's default order is newest first: "naru" would bury Naruto.
+    const response = await this.getCatalog({
+      page: 1,
+      search: query.trim(),
+      order: 'popular',
+    });
     return { data: response.data.slice(0, 8) };
   }
 

@@ -358,6 +358,7 @@
     },
     "/api/v1/catalog/suggestions": {
       "get": {
+        "description": "Las coincidencias más populares primero.",
         "operationId": "CatalogController_getSuggestions",
         "parameters": [
           {
