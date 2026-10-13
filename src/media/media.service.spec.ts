@@ -219,8 +219,6 @@ describe('MediaService.localize', () => {
 });
 
 describe('MediaService.convert', () => {
-  afterEach(() => vi.restoreAllMocks());
-
   const lastUpsert = (h: ReturnType<typeof harness>) =>
     h.prisma.mediaAsset.upsert.mock.lastCall?.[0] as {
       create: object;

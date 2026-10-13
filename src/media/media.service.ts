@@ -44,7 +44,6 @@ const SETTINGS = [
 
 /** A failure that retrying cannot fix: no such image, or not a usable one. */
 class UnusableSourceError extends Error {}
-/** The source has no such image. */
 class MissingSourceError extends UnusableSourceError {}
 
 function isSourceImage(value: unknown): value is string {
@@ -310,7 +309,6 @@ export class MediaService implements OnModuleInit {
     return `${this.storage!.publicUrl}/${objectKey(asset.sourceUrl, asset.version!, width)}`;
   }
 
-  // One job per image; the exclusive policy drops those already queued.
   private async enqueue(urls: string[]) {
     try {
       await this.boss?.insert(

@@ -62,7 +62,7 @@ const abandonedItems = () => ({
 // 1,180 take about 2 min, and about 1.5 h if every source request times out
 // (3 × 12 s, 8 at a time); two such jobs share the worker. The retry waits out
 // ITEM_LEASE_MS so that it can reclaim the dead run's items.
-export const QUEUE_OPTIONS = {
+const QUEUE_OPTIONS = {
   notify: true,
   heartbeatSeconds: 30,
   expireInSeconds: 6 * 60 * 60,
@@ -393,7 +393,7 @@ export class DownloadJobsService implements OnModuleInit {
   private async process(jobId: string) {
     const job = await this.prisma.downloadJob.findUnique({
       where: { id: jobId },
-      include: { anime: true },
+      include: { anime: { select: { slug: true } } },
     });
     if (
       !job ||
