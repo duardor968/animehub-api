@@ -143,7 +143,6 @@ describe('AnimeAv1Service bounded home source', () => {
     new ConfigService({ ANIMEAV1_BASE_URL: 'https://source.test' }),
   );
   afterEach(() => {
-    vi.restoreAllMocks();
     vi.useRealTimers();
   });
 
@@ -241,7 +240,6 @@ describe('AnimeAv1Service route errors and relations', () => {
     new ConfigService({ ANIMEAV1_BASE_URL: 'https://source.test' }),
   );
   afterEach(() => {
-    vi.restoreAllMocks();
     vi.useRealTimers();
   });
 
