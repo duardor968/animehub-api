@@ -146,8 +146,7 @@ export class MediaService implements OnModuleInit {
   async onModuleInit() {
     if (!this.storage) return;
     // exclusive: one queued or active conversion per image (singletonKey).
-    this.boss = await this.queue.open(QUEUE_NAME, {
-      policy: 'exclusive',
+    this.boss = await this.queue.open(QUEUE_NAME, 'exclusive', {
       retryLimit: 3,
       retryDelay: 60,
       retryBackoff: true,

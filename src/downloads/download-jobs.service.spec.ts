@@ -11,6 +11,7 @@ import {
   DownloadJobsService,
   hashCapabilityToken,
   ITEM_LEASE_MS,
+  QUEUE_OPTIONS,
 } from './download-jobs.service';
 import { DownloadResolverService } from './download-resolver.service';
 import {
@@ -498,13 +499,18 @@ describe('DownloadJobsService recovery of a dead worker', () => {
     expect(h.items[0].attempts).toBe(1);
   });
 
-  it('requeues interrupted jobs when the worker starts', async () => {
-    const h = jobHarness([1, 2], DownloadJobStatus.RUNNING);
-    Object.assign(h.items[0], {
-      status: DownloadJobItemStatus.RUNNING,
-      updatedAt: abandoned(),
-    });
-    const boss = { work: vi.fn(), send: vi.fn() };
+  /** Starts the worker over a job that pg-boss holds in these states. */
+  async function startWorker(
+    h: ReturnType<typeof jobHarness>,
+    pgBossStates: string[] = [],
+  ) {
+    const boss = {
+      work: vi.fn(),
+      send: vi.fn(),
+      findJobs: vi.fn(() =>
+        Promise.resolve(pgBossStates.map((state) => ({ state }))),
+      ),
+    };
     const queue = { open: vi.fn(() => Promise.resolve(boss)) };
     const service = new DownloadJobsService(
       h.prisma as unknown as PrismaService,
@@ -512,16 +518,62 @@ describe('DownloadJobsService recovery of a dead worker', () => {
       h.sources.resolver as unknown as DownloadResolverService,
       queue as unknown as JobQueue,
     );
-
     await service.onModuleInit();
+    return { boss, queue };
+  }
 
-    expect(boss.work).toHaveBeenCalledOnce();
-    expect(boss.send).toHaveBeenCalledExactlyOnceWith(
+  const interrupted = () => {
+    const h = jobHarness([1, 2], DownloadJobStatus.RUNNING);
+    Object.assign(h.items[0], {
+      status: DownloadJobItemStatus.RUNNING,
+      updatedAt: abandoned(),
+    });
+    return h;
+  };
+
+  it('heartbeats jobs, so only a dead worker gets its job retried', async () => {
+    const { queue } = await startWorker(interrupted());
+
+    expect(queue.open).toHaveBeenCalledWith(
       'animehub-download-job',
-      { jobId: h.job.id },
-      { group: { id: 'bulk' } },
+      'standard',
+      QUEUE_OPTIONS,
+    );
+    expect(QUEUE_OPTIONS.heartbeatSeconds).toBeGreaterThanOrEqual(10);
+    // Above two jobs of 1,180 episodes whose every source request times out.
+    expect(QUEUE_OPTIONS.expireInSeconds).toBeGreaterThan(3 * 60 * 60);
+    // The retry can reclaim the items its dead run left RUNNING.
+    expect(QUEUE_OPTIONS.retryDelay * 1000).toBeGreaterThanOrEqual(
+      ITEM_LEASE_MS,
     );
   });
+
+  it.each([[[]], [['completed']], [['failed', 'completed']]])(
+    'requeues an interrupted job pg-boss holds as %j',
+    async (states) => {
+      const h = interrupted();
+      const { boss } = await startWorker(h, states);
+
+      expect(boss.work).toHaveBeenCalledOnce();
+      expect(boss.findJobs).toHaveBeenCalledWith('animehub-download-job', {
+        data: { jobId: h.job.id },
+      });
+      expect(boss.send).toHaveBeenCalledExactlyOnceWith(
+        'animehub-download-job',
+        { jobId: h.job.id },
+        { group: { id: 'bulk' } },
+      );
+    },
+  );
+
+  it.each(['created', 'retry', 'active'])(
+    'leaves an interrupted job in pg-boss state %s to pg-boss',
+    async (state) => {
+      const { boss } = await startWorker(interrupted(), ['completed', state]);
+
+      expect(boss.send).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     ['only live items', DownloadJobStatus.RUNNING, new Date()],
@@ -532,15 +584,7 @@ describe('DownloadJobsService recovery of a dead worker', () => {
       status: DownloadJobItemStatus.RUNNING,
       updatedAt,
     });
-    const boss = { work: vi.fn(), send: vi.fn() };
-    const service = new DownloadJobsService(
-      h.prisma as unknown as PrismaService,
-      {} as AnimeService,
-      {} as DownloadResolverService,
-      { open: () => Promise.resolve(boss) } as unknown as JobQueue,
-    );
-
-    await service.onModuleInit();
+    const { boss } = await startWorker(h);
 
     expect(boss.send).not.toHaveBeenCalled();
   });

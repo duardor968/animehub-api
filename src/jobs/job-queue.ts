@@ -1,6 +1,6 @@
 import { Injectable, Logger, Module, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PgBoss, type Queue } from 'pg-boss';
+import { PgBoss, type Queue, type QueuePolicy } from 'pg-boss';
 import { databaseSchema } from '../prisma/prisma.service';
 
 /** The process's one pg-boss instance, shared by every queue. */
@@ -12,16 +12,23 @@ export class JobQueue implements OnModuleDestroy {
   constructor(private readonly config: ConfigService) {}
 
   /**
-   * Starts pg-boss on first use and declares the queue. null when
-   * JOBS_ENABLED is false: no worker, no queue.
+   * Starts pg-boss on first use and declares the queue with these options,
+   * also when it already exists. null when JOBS_ENABLED is false: no worker,
+   * no queue.
    */
-  async open(name: string, options: Omit<Queue, 'name'>) {
+  async open(
+    name: string,
+    policy: QueuePolicy,
+    options: Omit<Queue, 'name' | 'policy' | 'partition'>,
+  ) {
     if (this.config.get<string>('JOBS_ENABLED', 'true') === 'false') {
       return null;
     }
     this.boss ??= this.start();
     const boss = await this.boss;
-    await boss.createQueue(name, options);
+    await boss.createQueue(name, { policy, ...options });
+    // createQueue leaves an existing queue as it was first created.
+    await boss.updateQueue(name, options);
     return boss;
   }
 

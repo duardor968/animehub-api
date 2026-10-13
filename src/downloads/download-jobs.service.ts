@@ -56,6 +56,21 @@ const abandonedItems = () => ({
   updatedAt: { lt: new Date(Date.now() - ITEM_LEASE_MS) },
 });
 
+// A running job's worker refreshes its heartbeat every 15 s; pg-boss retries
+// the job only once those stop, i.e. its worker died. Expiration just bounds a
+// hung handler: 100 uncached episodes took 9 s (about 11/s), so One Piece's
+// 1,180 take about 2 min, and about 1.5 h if every source request times out
+// (3 × 12 s, 8 at a time); two such jobs share the worker. The retry waits out
+// ITEM_LEASE_MS so that it can reclaim the dead run's items.
+export const QUEUE_OPTIONS = {
+  notify: true,
+  heartbeatSeconds: 30,
+  expireInSeconds: 6 * 60 * 60,
+  retryDelay: ITEM_LEASE_MS / 1000,
+};
+// pg-boss job states of a job it still runs or will retry by itself.
+const HELD_STATES = new Set(['created', 'retry', 'active']);
+
 function sha256(value: string) {
   return createHash('sha256').update(value).digest('hex');
 }
@@ -116,10 +131,7 @@ export class DownloadJobsService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    this.boss = await this.queue.open(QUEUE_NAME, {
-      policy: 'standard',
-      notify: true,
-    });
+    this.boss = await this.queue.open(QUEUE_NAME, 'standard', QUEUE_OPTIONS);
     if (!this.boss) return;
     await this.boss.work<{ jobId: string }>(
       QUEUE_NAME,
@@ -128,8 +140,9 @@ export class DownloadJobsService implements OnModuleInit {
         for (const job of jobs) await this.process(job.data.jobId);
       },
     );
-    // Requeue the jobs a dead worker left behind: process() reclaims their
-    // abandoned items. pg-boss alone retries such a job only once it expires.
+    // Requeue the jobs a dead worker left behind that pg-boss no longer holds
+    // (retries spent, or finished around stuck items): process() reclaims
+    // their abandoned items. Those it holds, it retries itself.
     const interrupted = await this.prisma.downloadJob.findMany({
       where: {
         status: { in: ACTIVE_JOB_STATUSES },
@@ -138,7 +151,14 @@ export class DownloadJobsService implements OnModuleInit {
       },
       select: { id: true },
     });
-    for (const { id } of interrupted) await this.enqueue(id);
+    for (const { id } of interrupted) {
+      const held = await this.boss.findJobs(QUEUE_NAME, {
+        data: { jobId: id },
+      });
+      if (!held.some((job) => HELD_STATES.has(job.state))) {
+        await this.enqueue(id);
+      }
+    }
   }
 
   /**
