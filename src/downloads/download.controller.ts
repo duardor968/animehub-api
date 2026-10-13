@@ -15,6 +15,10 @@ import {
 import { ApiProblemResponses } from '../common/openapi-problem-responses';
 import { DownloadResolverService } from './download-resolver.service';
 
+// The Web resolves an episode whenever its copy menu opens, on hover, so
+// browsing one series makes dozens of these calls a minute.
+export const RESOLVE_RATE_LIMIT = 60;
+
 @ApiTags('downloads')
 @Controller('anime/:slug/downloads')
 export class DownloadController {
@@ -22,7 +26,9 @@ export class DownloadController {
 
   @Post('resolve')
   @HttpCode(HttpStatus.OK)
-  @RouteConfig({ rateLimit: { max: 20, timeWindow: '1 minute' } })
+  @RouteConfig({
+    rateLimit: { max: RESOLVE_RATE_LIMIT, timeWindow: '1 minute' },
+  })
   @ApiOperation({ summary: 'Resuelve hasta cincuenta episodios por operación' })
   @ApiOkResponse({ type: ResolveDownloadsResponseDto })
   @ApiProblemResponses(400, 404, 429, 500, 503)

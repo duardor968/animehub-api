@@ -12,6 +12,11 @@ import {
 } from './downloads/download-jobs.controller';
 import { DownloadJobsService } from './downloads/download-jobs.service';
 import {
+  DownloadController,
+  RESOLVE_RATE_LIMIT,
+} from './downloads/download.controller';
+import { DownloadResolverService } from './downloads/download-resolver.service';
+import {
   AnimeAv1NotFoundError,
   AnimeAv1UnavailableError,
 } from './source/animeav1.service';
@@ -206,6 +211,53 @@ describe('rate limit keys behind trusted proxies', () => {
     }
 
     expect(statuses).toEqual([200, 429]);
+  });
+});
+
+describe('episode link resolution limit', () => {
+  let app: NestFastifyApplication;
+
+  @Module({
+    imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true })],
+    controllers: [DownloadController],
+    providers: [
+      {
+        provide: DownloadResolverService,
+        useValue: { resolve: () => Promise.resolve({ data: {} }) },
+      },
+    ],
+  })
+  class ResolveProbeModule {}
+
+  beforeAll(async () => {
+    app = await NestFactory.create<NestFastifyApplication>(
+      ResolveProbeModule,
+      createFastifyAdapter(),
+      { logger: false },
+    );
+    await configureApp(app);
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+  });
+
+  afterAll(() => app.close());
+
+  it('lets one address resolve an episode once a second for a minute', async () => {
+    const resolve = () =>
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/anime/one-piece/downloads/resolve',
+        remoteAddress: '203.0.113.30',
+        payload: { episodeNumbers: [1], audio: 'SUB', providers: ['MEGA'] },
+      });
+    const statuses = new Set<number>();
+    for (let call = 0; call < RESOLVE_RATE_LIMIT; call += 1) {
+      statuses.add((await resolve()).statusCode);
+    }
+
+    expect(RESOLVE_RATE_LIMIT).toBe(60);
+    expect([...statuses]).toEqual([200]);
+    expect((await resolve()).statusCode).toBe(429);
   });
 });
 
