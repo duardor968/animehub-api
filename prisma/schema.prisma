@@ -312,8 +312,6 @@ model MediaAsset {
   version   String?
   widths    Int[]            @default([])
   etag      String?
-  bytes     Int?
-  failures  Int              @default(0)
   // Last fetch from the source: schedules retries and revalidation.
   checkedAt DateTime         @default(now())
 }

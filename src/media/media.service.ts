@@ -276,7 +276,6 @@ export class MediaService implements OnModuleInit {
         version,
         widths: variants.map(({ width }) => width),
         etag,
-        bytes: variants.reduce((total, { body }) => total + body.length, 0),
         checkedAt,
       };
       await this.prisma.mediaAsset.upsert({
@@ -292,9 +291,8 @@ export class MediaService implements OnModuleInit {
       // A ready copy stays in use; the failure only postpones the next check.
       await this.prisma.mediaAsset.upsert({
         where: { sourceUrl },
-        create: { sourceUrl, status, failures: 1 },
+        create: { sourceUrl, status },
         update: {
-          failures: { increment: 1 },
           checkedAt,
           ...(asset?.status === MediaAssetStatus.READY ? {} : { status }),
         },

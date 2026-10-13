@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "MediaAssetStatus" AS ENUM ('READY', 'FAILED');
+CREATE TYPE "MediaAssetStatus" AS ENUM ('READY', 'FAILED', 'MISSING');
 
 -- CreateTable
 CREATE TABLE "MediaAsset" (
@@ -8,8 +8,6 @@ CREATE TABLE "MediaAsset" (
     "version" TEXT,
     "widths" INTEGER[] DEFAULT ARRAY[]::INTEGER[],
     "etag" TEXT,
-    "bytes" INTEGER,
-    "failures" INTEGER NOT NULL DEFAULT 0,
     "checkedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "MediaAsset_pkey" PRIMARY KEY ("sourceUrl")

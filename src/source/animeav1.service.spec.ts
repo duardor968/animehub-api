@@ -23,8 +23,6 @@ describe('AnimeAv1Service', () => {
     new ConfigService({ ANIMEAV1_BASE_URL: 'https://source.test' }),
   );
 
-  afterEach(() => vi.restoreAllMocks());
-
   it('decodes and normalizes SvelteKit route data without HTML', async () => {
     const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue(
       routeResponse({

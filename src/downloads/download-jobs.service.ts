@@ -505,7 +505,13 @@ export class DownloadJobsService implements OnModuleInit {
       include: {
         items: {
           orderBy: { episode: { number: 'asc' } },
-          include: { episode: true },
+          select: {
+            status: true,
+            resolvedAudio: true,
+            links: true,
+            errorCode: true,
+            episode: { select: { number: true } },
+          },
         },
       },
     });

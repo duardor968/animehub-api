@@ -281,8 +281,8 @@ describe('MediaService.convert', () => {
       ([args]) => args as { create: object; update: object },
     );
     expect(missing).toMatchObject({
-      create: { status: MediaAssetStatus.MISSING, failures: 1 },
-      update: { status: MediaAssetStatus.MISSING, failures: { increment: 1 } },
+      create: { status: MediaAssetStatus.MISSING },
+      update: { status: MediaAssetStatus.MISSING },
     });
     expect(outage).toMatchObject({
       create: { status: MediaAssetStatus.FAILED },
