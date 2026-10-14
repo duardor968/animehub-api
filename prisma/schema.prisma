@@ -236,12 +236,14 @@ model DownloadLink {
 }
 
 model DownloadProbe {
-  episodeId String   @id
-  episode   Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
-  fetchedAt DateTime
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  episodeId   String   @id
+  episode     Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  fetchedAt   DateTime
+  expiresAt   DateTime
+  // Since when the stored links are as they are; it sets their TTL.
+  stableSince DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([expiresAt])
 }
