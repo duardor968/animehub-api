@@ -520,6 +520,8 @@ export class AnimeAv1Service {
     if (normalized.includes('1fichier') || normalized.includes('onefichier')) {
       return 'ONE_FICHIER';
     }
+    if (normalized.includes('streamtape')) return 'STREAMTAPE';
+    if (normalized.includes('transferit')) return 'TRANSFERIT';
     return null;
   }
 

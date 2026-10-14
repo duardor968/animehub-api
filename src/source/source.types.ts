@@ -88,7 +88,12 @@ export interface SourceScheduleEntry {
 }
 
 export type SourceDownloadProvider =
-  'MEGA' | 'PIXELDRAIN' | 'MP4UPLOAD' | 'ONE_FICHIER';
+  | 'MEGA'
+  | 'PIXELDRAIN'
+  | 'MP4UPLOAD'
+  | 'ONE_FICHIER'
+  | 'STREAMTAPE'
+  | 'TRANSFERIT';
 
 export interface SourceDownloadLink {
   audio: 'SUB' | 'DUB';

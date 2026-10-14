@@ -58,6 +58,8 @@ enum DownloadProvider {
   PIXELDRAIN
   MP4UPLOAD
   ONE_FICHIER
+  STREAMTAPE
+  TRANSFERIT
 }
 
 enum DownloadJobStatus {

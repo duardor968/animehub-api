@@ -1897,7 +1897,14 @@
             "type": "array",
             "items": {
               "type": "string",
-              "enum": ["MEGA", "PIXELDRAIN", "MP4UPLOAD", "ONE_FICHIER"]
+              "enum": [
+                "MEGA",
+                "PIXELDRAIN",
+                "MP4UPLOAD",
+                "ONE_FICHIER",
+                "STREAMTAPE",
+                "TRANSFERIT"
+              ]
             }
           },
           "refresh": {
@@ -1912,7 +1919,14 @@
         "properties": {
           "provider": {
             "type": "string",
-            "enum": ["MEGA", "PIXELDRAIN", "MP4UPLOAD", "ONE_FICHIER"]
+            "enum": [
+              "MEGA",
+              "PIXELDRAIN",
+              "MP4UPLOAD",
+              "ONE_FICHIER",
+              "STREAMTAPE",
+              "TRANSFERIT"
+            ]
           },
           "url": {
             "type": "string"
@@ -1979,7 +1993,14 @@
             "minItems": 1,
             "items": {
               "type": "string",
-              "enum": ["MEGA", "PIXELDRAIN", "MP4UPLOAD", "ONE_FICHIER"]
+              "enum": [
+                "MEGA",
+                "PIXELDRAIN",
+                "MP4UPLOAD",
+                "ONE_FICHIER",
+                "STREAMTAPE",
+                "TRANSFERIT"
+              ]
             }
           },
           "scope": {
@@ -2002,7 +2023,14 @@
             "minItems": 1,
             "items": {
               "type": "string",
-              "enum": ["MEGA", "PIXELDRAIN", "MP4UPLOAD", "ONE_FICHIER"]
+              "enum": [
+                "MEGA",
+                "PIXELDRAIN",
+                "MP4UPLOAD",
+                "ONE_FICHIER",
+                "STREAMTAPE",
+                "TRANSFERIT"
+              ]
             }
           },
           "scope": {
@@ -2035,7 +2063,14 @@
             "minItems": 1,
             "items": {
               "type": "string",
-              "enum": ["MEGA", "PIXELDRAIN", "MP4UPLOAD", "ONE_FICHIER"]
+              "enum": [
+                "MEGA",
+                "PIXELDRAIN",
+                "MP4UPLOAD",
+                "ONE_FICHIER",
+                "STREAMTAPE",
+                "TRANSFERIT"
+              ]
             }
           },
           "scope": {

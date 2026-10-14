@@ -30,6 +30,8 @@ export enum ProviderDto {
   PIXELDRAIN = 'PIXELDRAIN',
   MP4UPLOAD = 'MP4UPLOAD',
   ONE_FICHIER = 'ONE_FICHIER',
+  STREAMTAPE = 'STREAMTAPE',
+  TRANSFERIT = 'TRANSFERIT',
 }
 
 export class ResolveDownloadsDto {

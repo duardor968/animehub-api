@@ -115,6 +115,8 @@ describe('AnimeAv1Service', () => {
           ],
           dub: [
             { server: 'PixelDrain', url: 'https://pixeldrain.com/u/example' },
+            { server: 'StreamTape', url: 'https://streamtape.com/v/example' },
+            { server: 'TransferIt', url: 'https://transfer.it/t/example' },
           ],
           LAT: [{ server: 'MEGA', url: 'https://mega.nz/file/ignored' }],
         },
@@ -133,6 +135,16 @@ describe('AnimeAv1Service', () => {
         audio: 'DUB',
         provider: 'PIXELDRAIN',
         url: 'https://pixeldrain.com/u/example',
+      },
+      {
+        audio: 'DUB',
+        provider: 'STREAMTAPE',
+        url: 'https://streamtape.com/v/example',
+      },
+      {
+        audio: 'DUB',
+        provider: 'TRANSFERIT',
+        url: 'https://transfer.it/t/example',
       },
     ]);
   });
