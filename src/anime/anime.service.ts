@@ -17,6 +17,10 @@ import { sourceDeadline, waitForSource } from '../source/source-wait';
 const detailInclude = {
   category: true,
   genres: { include: { genre: true } },
+  incomingRelations: {
+    orderBy: [{ sourceAnimeId: 'asc' as const }, { position: 'asc' as const }],
+    include: { sourceAnime: { include: { category: true } } },
+  },
   outgoingRelations: {
     orderBy: { position: 'asc' as const },
     include: { targetAnime: { include: { category: true } } },

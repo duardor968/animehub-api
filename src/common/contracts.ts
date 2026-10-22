@@ -158,6 +158,12 @@ export class AnimeDetailDto extends AnimeSummaryDto {
   })
   genres!: CategoryDto[];
   @ApiProperty({ type: [RelationDto] }) relations!: RelationDto[];
+  @ApiProperty({
+    type: [RelationDto],
+    description:
+      'Observed incoming edges. anime is the source of the edge; kind describes source anime to this anime and is not inverted. Absence is not proof of no relation.',
+  })
+  incomingRelations!: RelationDto[];
 }
 
 export class AnimeResponseDto {

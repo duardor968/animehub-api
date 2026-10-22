@@ -1,6 +1,580 @@
 {
   "openapi": "3.0.0",
   "paths": {
+    "/api/v1/remote/devices": {
+      "post": {
+        "operationId": "RemoteController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDeviceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteCredentialDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "summary": "",
+        "tags": ["remote desktop"]
+      },
+      "get": {
+        "operationId": "RemoteController_devices",
+        "parameters": [
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteDevicesDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "remoteCapability": []
+          }
+        ],
+        "tags": ["remote desktop"]
+      }
+    },
+    "/api/v1/remote/sessions": {
+      "post": {
+        "operationId": "RemoteController_session",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteCredentialDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "summary": "",
+        "tags": ["remote desktop"]
+      }
+    },
+    "/api/v1/remote/devices/me/pairing": {
+      "post": {
+        "operationId": "RemoteController_pairing",
+        "parameters": [
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemotePairingDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "remoteCapability": []
+          }
+        ],
+        "tags": ["remote desktop"]
+      }
+    },
+    "/api/v1/remote/links": {
+      "post": {
+        "operationId": "RemoteController_pair",
+        "parameters": [
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairDeviceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteLinkDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "remoteCapability": []
+          }
+        ],
+        "tags": ["remote desktop"]
+      }
+    },
+    "/api/v1/remote/devices/me/profiles": {
+      "put": {
+        "operationId": "RemoteController_profiles",
+        "parameters": [
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishProfilesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteRevisionDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "remoteCapability": []
+          }
+        ],
+        "tags": ["remote desktop"]
+      }
+    },
+    "/api/v1/remote/requests": {
+      "post": {
+        "operationId": "RemoteController_create",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "UUID unique within this browser session",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRemoteRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteRequestDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "remoteCapability": []
+          }
+        ],
+        "tags": ["remote desktop"]
+      },
+      "get": {
+        "operationId": "RemoteController_requests",
+        "parameters": [
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteRequestsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "remoteCapability": []
+          }
+        ],
+        "tags": ["remote desktop"]
+      }
+    },
+    "/api/v1/remote/devices/me/inbox": {
+      "get": {
+        "operationId": "RemoteController_inbox",
+        "parameters": [
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteRequestsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "remoteCapability": []
+          }
+        ],
+        "tags": ["remote desktop"]
+      }
+    },
+    "/api/v1/remote/devices/me/inbox/{id}": {
+      "get": {
+        "operationId": "RemoteController_request",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteRequestDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "remoteCapability": []
+          }
+        ],
+        "tags": ["remote desktop"]
+      }
+    },
+    "/api/v1/remote/devices/me/inbox/{id}/ack": {
+      "post": {
+        "operationId": "RemoteController_ack",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AckRemoteRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteRequestDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "remoteCapability": []
+          }
+        ],
+        "tags": ["remote desktop"]
+      }
+    },
+    "/api/v1/remote/requests/{id}/cancel": {
+      "post": {
+        "operationId": "RemoteController_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteRequestDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "remoteCapability": []
+          }
+        ],
+        "tags": ["remote desktop"]
+      }
+    },
+    "/api/v1/remote/devices/me/links": {
+      "get": {
+        "operationId": "RemoteController_deviceLinks",
+        "parameters": [
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteBrowserLinksDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "remoteCapability": []
+          }
+        ],
+        "tags": ["remote desktop"]
+      }
+    },
+    "/api/v1/remote/devices/me/links/{id}": {
+      "delete": {
+        "operationId": "RemoteController_revokeBrowser",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteBrowserRevocationDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "remoteCapability": []
+          }
+        ],
+        "tags": ["remote desktop"]
+      }
+    },
+    "/api/v1/remote/links/{deviceId}": {
+      "delete": {
+        "operationId": "RemoteController_revoke",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteRevocationDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "remoteCapability": []
+          }
+        ],
+        "tags": ["remote desktop"]
+      }
+    },
     "/api/v1/health/live": {
       "get": {
         "operationId": "HealthController_live",
@@ -1294,9 +1868,326 @@
         "bearerFormat": "opaque capability",
         "type": "http",
         "description": "Capacidad opaca y temporal devuelta al crear un trabajo de descarga; no es un JWT."
+      },
+      "remoteCapability": {
+        "scheme": "bearer",
+        "bearerFormat": "opaque remote capability",
+        "type": "http"
       }
     },
     "schemas": {
+      "RegisterDeviceDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["name"]
+      },
+      "RemoteCredentialDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Secret shown once; never place in URLs or logs"
+          }
+        },
+        "required": ["id", "token"]
+      },
+      "RemotePairingDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["code", "expiresAt"]
+      },
+      "PairDeviceDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^\\d{6}$"
+          }
+        },
+        "required": ["code"]
+      },
+      "RemoteLinkDto": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string"
+          }
+        },
+        "required": ["deviceId"]
+      },
+      "DestinationProfileDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "engine": {
+            "type": "string",
+            "enum": ["direct", "jdownloader"]
+          },
+          "isDefault": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "label", "engine", "isDefault"]
+      },
+      "RemoteDeviceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "profileRevision": {
+            "type": "number"
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DestinationProfileDto"
+            }
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "name", "profileRevision", "profiles", "lastSeenAt"]
+      },
+      "RemoteDevicesDto": {
+        "type": "object",
+        "properties": {
+          "devices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RemoteDeviceDto"
+            }
+          }
+        },
+        "required": ["devices"]
+      },
+      "PublishProfilesDto": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "number"
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DestinationProfileDto"
+            }
+          }
+        },
+        "required": ["revision", "profiles"]
+      },
+      "RemoteRevisionDto": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "number"
+          }
+        },
+        "required": ["revision"]
+      },
+      "CreateRemoteRequestDto": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string"
+          },
+          "animeSlug": {
+            "type": "string"
+          },
+          "episodeNumbers": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "profileId": {
+            "type": "string"
+          },
+          "profileRevision": {
+            "type": "number"
+          },
+          "engine": {
+            "type": "string",
+            "enum": ["direct", "jdownloader"]
+          }
+        },
+        "required": [
+          "deviceId",
+          "animeSlug",
+          "episodeNumbers",
+          "profileId",
+          "profileRevision",
+          "engine"
+        ]
+      },
+      "RemoteRequestDto": {
+        "type": "object",
+        "properties": {
+          "animeTitle": {
+            "type": "string",
+            "nullable": true,
+            "description": "Current canonical catalog title; null when catalog metadata is unavailable"
+          },
+          "id": {
+            "type": "string"
+          },
+          "deviceId": {
+            "type": "string"
+          },
+          "animeSlug": {
+            "type": "string"
+          },
+          "episodeNumbers": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "profileId": {
+            "type": "string"
+          },
+          "profileRevision": {
+            "type": "number"
+          },
+          "engine": {
+            "type": "string",
+            "enum": ["direct", "jdownloader"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "accepted", "cancelled", "requires_attention"]
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "acceptedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "animeTitle",
+          "id",
+          "deviceId",
+          "animeSlug",
+          "episodeNumbers",
+          "profileId",
+          "profileRevision",
+          "engine",
+          "status",
+          "reason",
+          "createdAt",
+          "acceptedAt"
+        ]
+      },
+      "RemoteRequestsDto": {
+        "type": "object",
+        "properties": {
+          "requests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RemoteRequestDto"
+            }
+          }
+        },
+        "required": ["requests"]
+      },
+      "AckRemoteRequestDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["accepted", "requires_attention"]
+          }
+        },
+        "required": ["status"]
+      },
+      "RemoteBrowserLinkDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "name", "createdAt"]
+      },
+      "RemoteBrowserLinksDto": {
+        "type": "object",
+        "properties": {
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RemoteBrowserLinkDto"
+            }
+          }
+        },
+        "required": ["links"]
+      },
+      "RemoteBrowserRevocationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revoked": {
+            "type": "boolean"
+          }
+        },
+        "required": ["id", "revoked"]
+      },
+      "RemoteRevocationDto": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string"
+          },
+          "revoked": {
+            "type": "boolean"
+          }
+        },
+        "required": ["deviceId", "revoked"]
+      },
       "ProblemDetailsDto": {
         "type": "object",
         "properties": {
@@ -1761,6 +2652,13 @@
             "items": {
               "$ref": "#/components/schemas/RelationDto"
             }
+          },
+          "incomingRelations": {
+            "description": "Observed incoming edges. anime is the source of the edge; kind describes source anime to this anime and is not inverted. Absence is not proof of no relation.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelationDto"
+            }
           }
         },
         "required": [
@@ -1771,7 +2669,8 @@
           "mature",
           "sourceUrl",
           "genres",
-          "relations"
+          "relations",
+          "incomingRelations"
         ]
       },
       "AnimeResponseDto": {

@@ -188,6 +188,7 @@ model AnimeRelation {
 
   @@unique([sourceAnimeId, targetSlug, kind])
   @@index([sourceAnimeId, position])
+  @@index([targetAnimeId])
 }
 
 model Snapshot {
@@ -328,4 +329,75 @@ model HomeRefreshLease {
   expiresAt     DateTime @default(now())
   nextAttemptAt DateTime @default(now())
   failures      Int      @default(0)
+}
+
+enum RemoteRequestStatus {
+  pending
+  accepted
+  cancelled
+  requires_attention
+}
+
+model RemoteDevice {
+  id              String          @id @default(uuid())
+  name            String
+  tokenHash       String          @unique
+  profileRevision Int             @default(0)
+  profiles        Json            @default("[]")
+  lastSeenAt      DateTime        @default(now())
+  createdAt       DateTime        @default(now())
+  links           RemoteLink[]
+  pairing         RemotePairing?
+  requests        RemoteRequest[]
+}
+
+model RemoteSession {
+  id        String          @id @default(uuid())
+  tokenHash String          @unique
+  createdAt DateTime        @default(now())
+  links     RemoteLink[]
+  requests  RemoteRequest[]
+}
+
+model RemoteLink {
+  sessionId String
+  deviceId  String
+  session   RemoteSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  device    RemoteDevice  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  revokedAt DateTime?
+  createdAt DateTime      @default(now())
+
+  @@id([sessionId, deviceId])
+}
+
+model RemotePairing {
+  deviceId  String       @id
+  device    RemoteDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  codeHash  String       @unique
+  expiresAt DateTime
+}
+
+model RemoteRequest {
+  id              String              @id @default(uuid())
+  sessionId       String
+  deviceId        String
+  session         RemoteSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  device          RemoteDevice        @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  idempotencyKey  String
+  fingerprint     String
+  animeSlug       String
+  episodeNumbers  Float[]
+  profileId       String
+  profileRevision Int
+  engine          String
+  status          RemoteRequestStatus @default(pending)
+
+  reason     String?
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([sessionId, idempotencyKey])
+  @@index([deviceId, status, createdAt])
+  @@index([sessionId, createdAt])
 }

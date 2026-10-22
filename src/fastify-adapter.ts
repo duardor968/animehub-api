@@ -45,6 +45,9 @@ export function createFastifyAdapter(logging = false): FastifyAdapter {
             paths: [
               'req.headers.authorization',
               'req.body.password',
+              'req.body.code',
+              'res.body.token',
+              'res.body.code',
               'res.headers.authorization',
             ],
             censor: '[Redacted]',

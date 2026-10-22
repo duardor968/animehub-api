@@ -7,6 +7,80 @@ import { SOURCE_WAIT_MS } from '../source/source-wait';
 import type { SourceCatalog } from '../source/source.types';
 import { CatalogService, isDegenerateCatalogPage } from './catalog.service';
 
+it('persists the relation graph fetched while enriching a new catalog entry', async () => {
+  const entry = {
+    id: 'new',
+    slug: 'new',
+    title: 'New',
+    synopsis: null,
+    posterUrl: 'https://cdn.test/new.jpg',
+    backdropUrl: 'https://cdn.test/new.jpg',
+    category: null,
+    genres: [],
+    status: 'AIRING' as const,
+    startDate: null,
+    mature: false,
+  };
+  const detail = {
+    ...entry,
+    alternativeTitle: null,
+    trailerUrl: null,
+    endDate: null,
+    nextEpisodeAt: null,
+    episodeCount: 1,
+    score: null,
+    votes: null,
+    episodes: [],
+    relations: [
+      { kind: 'PREQUEL' as const, anime: { ...entry, id: 'old', slug: 'old' } },
+    ],
+  };
+  const snapshot = {
+    items: [{ anime: { ...entry, sourceId: entry.id } }],
+    fetchedAt: new Date(),
+    nextRefreshAt: new Date(Date.now() + 60_000),
+    totalPages: 1,
+    totalRecords: 1,
+    minYear: 1990,
+    maxYear: 2026,
+  };
+  const prisma = {
+    snapshot: {
+      findUnique: vi
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue(snapshot),
+    },
+    category: { findMany: vi.fn().mockResolvedValue([]) },
+    genre: { findMany: vi.fn().mockResolvedValue([]) },
+  };
+  const projection = {
+    upsertAnime: vi.fn(),
+    upsertDetail: vi.fn().mockResolvedValue({ id: 'db-new' }),
+    replaceSnapshot: vi.fn().mockResolvedValue({}),
+  };
+  const source = {
+    getCatalog: vi.fn().mockResolvedValue({
+      results: [entry],
+      totalRecords: 1,
+      totalPages: 1,
+      categories: [],
+      genres: [],
+      years: [1990, 2026],
+    }),
+    getAnime: vi.fn().mockResolvedValue(detail),
+  };
+  const service = new CatalogService(
+    prisma as unknown as PrismaService,
+    projection as unknown as ProjectionService,
+    source as unknown as AnimeAv1Service,
+  );
+  const response = await service.getCatalog({ page: 1 });
+  expect(response.data[0].slug).toBe('new');
+  expect(projection.upsertDetail).toHaveBeenCalledWith(detail);
+  expect(projection.upsertAnime).not.toHaveBeenCalled();
+});
+
 describe('catalog page integrity policy', () => {
   it('rejects an empty in-range page with a positive total as degraded', () => {
     expect(isDegenerateCatalogPage(0, 1_000, 50, 50)).toBe(true);

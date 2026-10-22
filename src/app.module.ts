@@ -1,3 +1,4 @@
+import { RemoteModule } from './remote/remote.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AnimeModule } from './anime/anime.module';
@@ -19,6 +20,7 @@ import { SitemapModule } from './sitemap/sitemap.module';
       validate: validateEnvironment,
     }),
     PrismaModule,
+    RemoteModule,
     HealthModule,
     ProjectionModule,
     HomeModule,

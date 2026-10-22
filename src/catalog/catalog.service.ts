@@ -130,18 +130,19 @@ export class CatalogService {
           this.prisma.genre.upsert(bySlug(genre)),
         ),
       ]);
-      const enriched = await Promise.all(
-        source.results.map(async (entry) => {
-          if (entry.startDate && entry.category && entry.synopsis) return entry;
-          try {
-            return await this.source.getAnime(entry.slug);
-          } catch {
-            return entry;
-          }
-        }),
-      );
       const anime = await Promise.all(
-        enriched.map((entry) => this.projection.upsertAnime(entry)),
+        source.results.map(async (entry) => {
+          if (entry.startDate && entry.category && entry.synopsis) {
+            return this.projection.upsertAnime(entry);
+          }
+          let detail;
+          try {
+            detail = await this.source.getAnime(entry.slug);
+          } catch {
+            return this.projection.upsertAnime(entry);
+          }
+          return this.projection.upsertDetail(detail);
+        }),
       );
       await this.projection.replaceSnapshot(
         key,

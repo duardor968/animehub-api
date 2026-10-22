@@ -38,6 +38,11 @@ interface AnimeRecord {
   sourceUrl?: string;
   genres?: GenreRecord[];
   outgoingRelations?: RelationRecord[];
+  incomingRelations?: {
+    kind: string;
+    position: number;
+    sourceAnime: AnimeRecord;
+  }[];
 }
 
 interface EpisodeRecord {
@@ -130,6 +135,11 @@ export function serializeDetail(anime: AnimeRecord): AnimeDetailDto {
     sourceUrl: anime.sourceUrl ?? `https://animeav1.com/media/${anime.slug}`,
     genres: serializeGenres(anime.genres),
     relations: (anime.outgoingRelations ?? []).map(serializeRelation),
+    incomingRelations: (anime.incomingRelations ?? []).map((edge) => ({
+      kind: edge.kind,
+      position: edge.position,
+      anime: serializeAnime(edge.sourceAnime),
+    })),
   };
 }
 

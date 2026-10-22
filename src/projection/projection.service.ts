@@ -125,7 +125,10 @@ export class ProjectionService {
           title: source.title,
           synopsis: source.synopsis,
           episodes: source.episodes.map((episode) => episode.id),
-          relations: source.relations.map((relation) => relation.anime.id),
+          relations: source.relations.map((relation) => [
+            relation.anime.id,
+            relation.kind,
+          ]),
         }),
       )
       .digest('hex');
@@ -134,6 +137,10 @@ export class ProjectionService {
       select: { contentHash: true, unchangedRefreshes: true },
     });
     const contentChanged = previous.contentHash !== contentHash;
+    for (const episode of source.episodes) {
+      await this.upsertEpisode(anime.id, episode);
+    }
+    await this.replaceRelations(anime.id, source.relations);
     await this.prisma.anime.update({
       where: { id: anime.id },
       data: {
@@ -159,10 +166,6 @@ export class ProjectionService {
       },
     });
 
-    for (const episode of source.episodes) {
-      await this.upsertEpisode(anime.id, episode);
-    }
-    await this.replaceRelations(anime.id, source.relations);
     return anime;
   }
 
@@ -271,24 +274,26 @@ export class ProjectionService {
   }
 
   private async replaceRelations(animeId: string, relations: SourceRelation[]) {
-    await this.prisma.animeRelation.deleteMany({
-      where: { sourceAnimeId: animeId },
-    });
-    for (const [position, relation] of relations.entries()) {
-      const target = await this.upsertAnime(relation.anime);
-      await this.prisma.animeRelation.create({
-        data: {
-          sourceAnimeId: animeId,
-          targetAnimeId: target.id,
-          targetSourceId: relation.anime.id,
-          targetSlug: relation.anime.slug,
-          targetTitle: relation.anime.title,
-          targetPosterUrl: relation.anime.posterUrl,
-          targetYear: relation.anime.startDate?.getUTCFullYear(),
-          kind: relation.kind,
-          position,
-        },
+    return this.prisma.$transaction(async (tx) => {
+      await tx.animeRelation.deleteMany({
+        where: { sourceAnimeId: animeId },
       });
-    }
+      for (const [position, relation] of relations.entries()) {
+        const target = await this.upsertAnime(relation.anime, tx);
+        await tx.animeRelation.create({
+          data: {
+            sourceAnimeId: animeId,
+            targetAnimeId: target.id,
+            targetSourceId: relation.anime.id,
+            targetSlug: relation.anime.slug,
+            targetTitle: relation.anime.title,
+            targetPosterUrl: relation.anime.posterUrl,
+            targetYear: relation.anime.startDate?.getUTCFullYear(),
+            kind: relation.kind,
+            position,
+          },
+        });
+      }
+    });
   }
 }

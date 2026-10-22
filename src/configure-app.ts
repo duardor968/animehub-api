@@ -18,7 +18,7 @@ export async function configureApp(app: NestFastifyApplication) {
   app.setGlobalPrefix('api/v1');
   app.enableCors({
     origin: origins,
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     // Not CORS-safelisted: without this a browser cannot read when to retry
     // after a 429, or how much of the limit is left.
     exposedHeaders: [
@@ -89,6 +89,14 @@ export function createOpenApiDocument(
           'Capacidad opaca y temporal devuelta al crear un trabajo de descarga; no es un JWT.',
       },
       'jobCapability',
+    )
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'opaque remote capability',
+      },
+      'remoteCapability',
     )
     .build();
   return SwaggerModule.createDocument(app, openApiConfig);

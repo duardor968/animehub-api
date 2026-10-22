@@ -25,6 +25,51 @@ const anime = {
   ],
 };
 
+describe('directional relation discovery', () => {
+  it('exposes new to old without reversing PREQUEL or adding an outgoing edge', () => {
+    const newer = { ...anime, sourceId: '2', slug: 'new-season' };
+    const old = serializeDetail({
+      ...anime,
+      status: 'FINISHED',
+      incomingRelations: [{ kind: 'PREQUEL', position: 0, sourceAnime: newer }],
+    });
+    expect(old.relations).toEqual([]);
+    expect(old.incomingRelations).toMatchObject([
+      { kind: 'PREQUEL', anime: { id: '2' } },
+    ]);
+  });
+
+  it('preserves old to new outgoing semantics and does not infer grouping', () => {
+    const edge = (id: string) => ({
+      kind: 'SEQUEL',
+      position: 0,
+      targetAnime: { ...anime, sourceId: id },
+      targetSourceId: id,
+      targetSlug: id,
+      targetTitle: id,
+      targetPosterUrl: null,
+      targetYear: null,
+    });
+    const result = serializeDetail({
+      ...anime,
+      outgoingRelations: [edge('2'), edge('3')],
+    });
+    expect(result.relations.map((r) => [r.kind, r.anime.id])).toEqual([
+      ['SEQUEL', '2'],
+      ['SEQUEL', '3'],
+    ]);
+    expect(result.incomingRelations).toEqual([]);
+    expect(result).not.toHaveProperty('franchise');
+  });
+
+  it('returns empty arrays when no edges were observed', () => {
+    expect(serializeDetail(anime)).toMatchObject({
+      relations: [],
+      incomingRelations: [],
+    });
+  });
+});
+
 describe('genre serialization', () => {
   const expected = [
     'Acción',
