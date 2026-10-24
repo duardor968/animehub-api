@@ -1,4 +1,3 @@
-import { RemoteModule } from './remote/remote.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AnimeModule } from './anime/anime.module';
@@ -10,6 +9,7 @@ import { HomeModule } from './home/home.module';
 import { MediaModule } from './media/media.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectionModule } from './projection/projection.module';
+import { RemoteModule } from './remote/remote.module';
 import { ScheduleModule } from './schedule/schedule.module';
 import { SitemapModule } from './sitemap/sitemap.module';
 

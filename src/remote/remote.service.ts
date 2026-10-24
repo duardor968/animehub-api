@@ -30,7 +30,7 @@ export function remoteToken(header: string | undefined) {
     throw new UnauthorizedException();
   return hash(header.slice(7));
 }
-export function publicRequest(row: RemoteRequest) {
+function publicRequest(row: RemoteRequest) {
   return {
     id: row.id,
     deviceId: row.deviceId,
@@ -40,7 +40,6 @@ export function publicRequest(row: RemoteRequest) {
     profileRevision: row.profileRevision,
     engine: row.engine,
     status: row.status,
-
     createdAt: row.createdAt,
     acceptedAt: row.acceptedAt,
     reason: row.reason,
@@ -344,7 +343,6 @@ export class RemoteService {
         where: { id, deviceId: device.id },
       });
       if (!row) throw new NotFoundException();
-
       if (row.status === dto.status) return publicRequest(row);
       const link = await tx.remoteLink.findUnique({
         where: {

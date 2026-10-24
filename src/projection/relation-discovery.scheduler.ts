@@ -45,7 +45,6 @@ export class RelationDiscoveryScheduler
   }
 
   refreshObserved() {
-    if (this.active) return this.active;
     this.active = this.refresh().finally(() => {
       this.active = undefined;
     });

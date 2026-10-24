@@ -18,7 +18,7 @@ export async function configureApp(app: NestFastifyApplication) {
   app.setGlobalPrefix('api/v1');
   app.enableCors({
     origin: origins,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
     // Not CORS-safelisted: without this a browser cannot read when to retry
     // after a 429, or how much of the limit is left.
     exposedHeaders: [

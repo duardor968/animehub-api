@@ -391,11 +391,10 @@ model RemoteRequest {
   profileRevision Int
   engine          String
   status          RemoteRequestStatus @default(pending)
-
-  reason     String?
-  acceptedAt DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  reason          String?
+  acceptedAt      DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   @@unique([sessionId, idempotencyKey])
   @@index([deviceId, status, createdAt])

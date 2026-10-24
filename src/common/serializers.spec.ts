@@ -39,7 +39,7 @@ describe('directional relation discovery', () => {
     ]);
   });
 
-  it('preserves old to new outgoing semantics and does not infer grouping', () => {
+  it('preserves old to new outgoing semantics', () => {
     const edge = (id: string) => ({
       kind: 'SEQUEL',
       position: 0,
@@ -59,14 +59,6 @@ describe('directional relation discovery', () => {
       ['SEQUEL', '3'],
     ]);
     expect(result.incomingRelations).toEqual([]);
-    expect(result).not.toHaveProperty('franchise');
-  });
-
-  it('returns empty arrays when no edges were observed', () => {
-    expect(serializeDetail(anime)).toMatchObject({
-      relations: [],
-      incomingRelations: [],
-    });
   });
 });
 

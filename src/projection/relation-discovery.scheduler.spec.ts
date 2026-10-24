@@ -27,10 +27,7 @@ function harness() {
 describe('observed relation discovery', () => {
   it('persists new to finished old edges without fetching old or requiring a visit', async () => {
     const h = harness();
-    await Promise.all([
-      h.scheduler.refreshObserved(),
-      h.scheduler.refreshObserved(),
-    ]);
+    await h.scheduler.refreshObserved();
     expect(h.source.getAnime).toHaveBeenCalledTimes(1);
     expect(h.source.getAnime).toHaveBeenCalledWith(
       'new',

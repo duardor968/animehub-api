@@ -67,19 +67,17 @@ describe('Remote HTTP security boundary', () => {
     expect(result.statusCode).toBe(400);
     expect(create).not.toHaveBeenCalled();
   });
-  it('permits cross-origin profile PUT and link DELETE preflights for configured origin', async () => {
-    for (const method of ['PUT', 'DELETE']) {
-      const result = await app.inject({
-        method: 'OPTIONS',
-        url: '/api/v1/remote/devices',
-        headers: {
-          origin: 'http://localhost:3000',
-          'access-control-request-method': method,
-          'access-control-request-headers': 'authorization,content-type',
-        },
-      });
-      expect(result.statusCode).toBe(204);
-      expect(result.headers['access-control-allow-methods']).toContain(method);
-    }
+  it('permits the cross-origin link DELETE preflight for a configured origin', async () => {
+    const result = await app.inject({
+      method: 'OPTIONS',
+      url: '/api/v1/remote/links/device',
+      headers: {
+        origin: 'http://localhost:3000',
+        'access-control-request-method': 'DELETE',
+        'access-control-request-headers': 'authorization,content-type',
+      },
+    });
+    expect(result.statusCode).toBe(204);
+    expect(result.headers['access-control-allow-methods']).toContain('DELETE');
   });
 });

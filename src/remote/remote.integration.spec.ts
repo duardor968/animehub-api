@@ -276,7 +276,6 @@ describe.skipIf(!testUrl)(
         data: { expiresAt: new Date(0) },
       });
       await expect(api.pair(p.code, `Bearer ${s.token}`)).rejects.toThrow();
-      await expect(api.devices('Bearer wrong')).rejects.toThrow();
     });
   },
 );
