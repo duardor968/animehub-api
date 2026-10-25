@@ -19,6 +19,8 @@ import {
   ApiOperation,
 } from '@nestjs/swagger';
 import {
+  DeviceRemoteRequestDto,
+  DeviceRemoteRequestsDto,
   RemoteBrowserLinksDto,
   RemoteBrowserRevocationDto,
   RemoteCredentialDto,
@@ -105,30 +107,24 @@ export class RemoteController {
       .then((value) => this.remote.withTitles(value));
   }
   @Get('devices/me/inbox')
-  @ApiOkResponse({ type: RemoteRequestsDto })
+  @ApiOkResponse({ type: DeviceRemoteRequestsDto })
   inbox(@Headers('authorization') auth?: string) {
-    return this.remote
-      .inbox(auth)
-      .then((value) => this.remote.withTitles(value));
+    return this.remote.inbox(auth);
   }
   @Get('devices/me/inbox/:id')
-  @ApiOkResponse({ type: RemoteRequestDto })
+  @ApiOkResponse({ type: DeviceRemoteRequestDto })
   request(@Param('id') id: string, @Headers('authorization') auth?: string) {
-    return this.remote
-      .deviceRequest(id, auth)
-      .then((value) => this.remote.withTitles(value));
+    return this.remote.deviceRequest(id, auth);
   }
   @Post('devices/me/inbox/:id/ack')
   @HttpCode(200)
-  @ApiOkResponse({ type: RemoteRequestDto })
+  @ApiOkResponse({ type: DeviceRemoteRequestDto })
   ack(
     @Param('id') id: string,
     @Body() dto: AckRemoteRequestDto,
     @Headers('authorization') auth?: string,
   ) {
-    return this.remote
-      .ack(id, dto, auth)
-      .then((value) => this.remote.withTitles(value));
+    return this.remote.ack(id, dto, auth);
   }
   @Post('requests/:id/cancel')
   @HttpCode(200)

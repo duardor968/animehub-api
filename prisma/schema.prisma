@@ -345,7 +345,6 @@ model RemoteDevice {
   profileRevision Int             @default(0)
   profiles        Json            @default("[]")
   lastSeenAt      DateTime        @default(now())
-  createdAt       DateTime        @default(now())
   links           RemoteLink[]
   pairing         RemotePairing?
   requests        RemoteRequest[]
@@ -354,7 +353,6 @@ model RemoteDevice {
 model RemoteSession {
   id        String          @id @default(uuid())
   tokenHash String          @unique
-  createdAt DateTime        @default(now())
   links     RemoteLink[]
   requests  RemoteRequest[]
 }
@@ -392,9 +390,7 @@ model RemoteRequest {
   engine          String
   status          RemoteRequestStatus @default(pending)
   reason          String?
-  acceptedAt      DateTime?
   createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
 
   @@unique([sessionId, idempotencyKey])
   @@index([deviceId, status, createdAt])

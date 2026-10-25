@@ -40,8 +40,6 @@ function publicRequest(row: RemoteRequest) {
     profileRevision: row.profileRevision,
     engine: row.engine,
     status: row.status,
-    createdAt: row.createdAt,
-    acceptedAt: row.acceptedAt,
     reason: row.reason,
   };
 }
@@ -365,7 +363,6 @@ export class RemoteService {
               dto.status === 'requires_attention'
                 ? (dto.reason ?? 'Desktop requires attention')
                 : null,
-            acceptedAt: dto.status === 'accepted' ? new Date() : null,
           },
         }),
       );

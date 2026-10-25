@@ -313,7 +313,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RemoteRequestsDto"
+                  "$ref": "#/components/schemas/DeviceRemoteRequestsDto"
                 }
               }
             }
@@ -354,7 +354,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RemoteRequestDto"
+                  "$ref": "#/components/schemas/DeviceRemoteRequestDto"
                 }
               }
             }
@@ -405,7 +405,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RemoteRequestDto"
+                  "$ref": "#/components/schemas/DeviceRemoteRequestDto"
                 }
               }
             }
@@ -2048,11 +2048,6 @@
       "RemoteRequestDto": {
         "type": "object",
         "properties": {
-          "animeTitle": {
-            "type": "string",
-            "nullable": true,
-            "description": "Current canonical catalog title; null when catalog metadata is unavailable"
-          },
           "id": {
             "type": "string"
           },
@@ -2086,18 +2081,13 @@
             "type": "string",
             "nullable": true
           },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "acceptedAt": {
+          "animeTitle": {
             "type": "string",
             "nullable": true,
-            "format": "date-time"
+            "description": "Current canonical catalog title; null when catalog metadata is unavailable"
           }
         },
         "required": [
-          "animeTitle",
           "id",
           "deviceId",
           "animeSlug",
@@ -2107,8 +2097,7 @@
           "engine",
           "status",
           "reason",
-          "createdAt",
-          "acceptedAt"
+          "animeTitle"
         ]
       },
       "RemoteRequestsDto": {
@@ -2118,6 +2107,67 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/RemoteRequestDto"
+            }
+          }
+        },
+        "required": ["requests"]
+      },
+      "DeviceRemoteRequestDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "deviceId": {
+            "type": "string"
+          },
+          "animeSlug": {
+            "type": "string"
+          },
+          "episodeNumbers": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "profileId": {
+            "type": "string"
+          },
+          "profileRevision": {
+            "type": "number"
+          },
+          "engine": {
+            "type": "string",
+            "enum": ["direct", "jdownloader"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "accepted", "cancelled", "requires_attention"]
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "deviceId",
+          "animeSlug",
+          "episodeNumbers",
+          "profileId",
+          "profileRevision",
+          "engine",
+          "status",
+          "reason"
+        ]
+      },
+      "DeviceRemoteRequestsDto": {
+        "type": "object",
+        "properties": {
+          "requests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeviceRemoteRequestDto"
             }
           }
         },

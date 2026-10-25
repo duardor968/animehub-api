@@ -87,14 +87,8 @@ export class RemotePairingDto {
   @ApiProperty() code!: string;
   @ApiProperty({ format: 'date-time' }) expiresAt!: string;
 }
-export class RemoteRequestDto {
-  @ApiProperty({
-    nullable: true,
-    type: String,
-    description:
-      'Current canonical catalog title; null when catalog metadata is unavailable',
-  })
-  animeTitle!: string | null;
+/** A request as the PC reads it. */
+export class DeviceRemoteRequestDto {
   @ApiProperty() id!: string;
   @ApiProperty() deviceId!: string;
   @ApiProperty() animeSlug!: string;
@@ -107,9 +101,20 @@ export class RemoteRequestDto {
   })
   status!: string;
   @ApiProperty({ nullable: true, type: String }) reason!: string | null;
-  @ApiProperty({ format: 'date-time' }) createdAt!: string;
-  @ApiProperty({ nullable: true, type: String, format: 'date-time' })
-  acceptedAt!: string | null;
+}
+export class DeviceRemoteRequestsDto {
+  @ApiProperty({ type: [DeviceRemoteRequestDto] })
+  requests!: DeviceRemoteRequestDto[];
+}
+/** A request as the browser that sent it reads it. */
+export class RemoteRequestDto extends DeviceRemoteRequestDto {
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description:
+      'Current canonical catalog title; null when catalog metadata is unavailable',
+  })
+  animeTitle!: string | null;
 }
 export class RemoteRequestsDto {
   @ApiProperty({ type: [RemoteRequestDto] }) requests!: RemoteRequestDto[];
