@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { SnapshotKind, SourceAvailability } from '../generated/prisma/enums';
 import { PrismaService } from '../prisma/prisma.service';
-import type { Prisma } from '../generated/prisma/client';
+import { Prisma } from '../generated/prisma/client';
 import {
   SourceAnimeDetail,
   SourceAnimeSummary,
@@ -274,16 +274,25 @@ export class ProjectionService {
   }
 
   private async replaceRelations(animeId: string, relations: SourceRelation[]) {
-    return this.prisma.$transaction(async (tx) => {
+    // Resolve targets before the transaction: reciprocal relations must not
+    // hold writes on each other's anime while inserting their foreign keys.
+    const targets = await Promise.all(
+      relations.map((relation) => this.upsertAnime(relation.anime)),
+    );
+    const replace = async (tx: Prisma.TransactionClient) => {
+      // Serialize replacements even when the source has no existing edges.
+      // An advisory lock avoids blocking foreign keys from other anime.
+      await tx.$executeRaw`
+        SELECT pg_advisory_xact_lock(hashtextextended(${`animehub:relations:${animeId}`}, 0))
+      `;
       await tx.animeRelation.deleteMany({
         where: { sourceAnimeId: animeId },
       });
       for (const [position, relation] of relations.entries()) {
-        const target = await this.upsertAnime(relation.anime, tx);
         await tx.animeRelation.create({
           data: {
             sourceAnimeId: animeId,
-            targetAnimeId: target.id,
+            targetAnimeId: targets[position].id,
             targetSourceId: relation.anime.id,
             targetSlug: relation.anime.slug,
             targetTitle: relation.anime.title,
@@ -294,6 +303,21 @@ export class ProjectionService {
           },
         });
       }
-    });
+    };
+    // A concurrent multi-anime writer (home refresh) can still deadlock with
+    // these foreign keys. Retry only transactions PostgreSQL has rolled back.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this.prisma.$transaction(replace);
+      } catch (error) {
+        if (
+          !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+          error.code !== 'P2034' ||
+          attempt === 3
+        ) {
+          throw error;
+        }
+      }
+    }
   }
 }
