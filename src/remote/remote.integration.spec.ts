@@ -3,8 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Pool } from 'pg';
-import { beforeAll, afterAll, describe, it, expect } from 'vitest';
+import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
 import { PrismaService } from '../prisma/prisma.service';
+import { RemoteEvents } from './remote-events';
 import { RemoteService } from './remote.service';
 
 const testUrl = process.env.TEST_DATABASE_URL;
@@ -15,6 +16,7 @@ describe.skipIf(!testUrl)(
     let admin: Pool;
     let db: PrismaService;
     let api: RemoteService;
+    let events: RemoteEvents;
     beforeAll(async () => {
       admin = new Pool({ connectionString: testUrl });
       const connection = await admin.connect();
@@ -38,7 +40,8 @@ describe.skipIf(!testUrl)(
       db = new PrismaService(
         new ConfigService({ DATABASE_URL: url.toString() }),
       );
-      api = new RemoteService(db);
+      events = new RemoteEvents();
+      api = new RemoteService(db, events);
     });
     afterAll(async () => {
       await db?.$disconnect();
@@ -116,7 +119,7 @@ describe.skipIf(!testUrl)(
       await expect(
         api.create({ ...f.dto, episodeNumbers: [3] }, key, f.sa),
       ).rejects.toThrow();
-      const restarted = new RemoteService(db);
+      const restarted = new RemoteService(db, new RemoteEvents());
       expect((await restarted.inbox(f.da)).requests.map((r) => r.id)).toContain(
         results[0].id,
       );
@@ -276,6 +279,143 @@ describe.skipIf(!testUrl)(
         data: { expiresAt: new Date(0) },
       });
       await expect(api.pair(p.code, `Bearer ${s.token}`)).rejects.toThrow();
+    });
+    it('shows a PC offline as soon as its channel closes, and tells its browsers', async () => {
+      const device = await api.register('Channel PC');
+      const poller = await api.register('Polling PC');
+      const session = await api.createSession();
+      const sa = `Bearer ${session.token}`;
+      await api.pair((await api.pairing(`Bearer ${device.token}`)).code, sa);
+      await api.pair((await api.pairing(`Bearer ${poller.token}`)).code, sa);
+      const seen: string[] = [];
+      const browser = (await api.sessionEvents(sa)).subscribe(
+        (e) => e.type && seen.push(e.type),
+      );
+      const online = async () =>
+        Object.fromEntries(
+          (await api.devices(sa)).devices.map((d) => [d.name, d.online]),
+        );
+      try {
+        // Without a channel, seen recently: online by the 90 s rule.
+        await api.inbox(`Bearer ${poller.token}`);
+        const channel = (
+          await api.deviceEvents(`Bearer ${device.token}`)
+        ).subscribe();
+        await vi.waitFor(() => expect(seen).toEqual(['devices']));
+        expect(await online()).toEqual({
+          'Channel PC': true,
+          'Polling PC': true,
+        });
+        channel.unsubscribe();
+        await vi.waitFor(() => expect(seen).toEqual(['devices', 'devices']));
+        // Seen a moment ago, but its channel closed: offline now, not in 90 s.
+        expect(await online()).toEqual({
+          'Channel PC': false,
+          'Polling PC': true,
+        });
+      } finally {
+        browser.unsubscribe();
+      }
+    });
+    it('tells each PC and browser what to read again, and names browsers by their User-Agent', async () => {
+      const device = await api.register('Live PC');
+      const session = await api.createSession();
+      const stranger = await api.createSession();
+      const da = `Bearer ${device.token}`;
+      const sa = `Bearer ${session.token}`;
+      const seen = { device: [] as string[], session: [] as string[] };
+      const strangerSeen: string[] = [];
+      const take = (list: string[]) => list.splice(0);
+      const registered = await db.remoteDevice.findUniqueOrThrow({
+        where: { id: device.id },
+      });
+      const streams = [
+        (await api.deviceEvents(da)).subscribe(
+          (e) => e.type && seen.device.push(e.type),
+        ),
+        (await api.sessionEvents(sa)).subscribe(
+          (e) => e.type && seen.session.push(e.type),
+        ),
+        (await api.sessionEvents(`Bearer ${stranger.token}`)).subscribe(
+          (e) => e.type && strangerSeen.push(e.type),
+        ),
+      ];
+      try {
+        // Opening the channel counts as being seen.
+        expect(
+          (
+            await db.remoteDevice.findUniqueOrThrow({
+              where: { id: device.id },
+            })
+          ).lastSeenAt.getTime(),
+        ).toBeGreaterThanOrEqual(registered.lastSeenAt.getTime());
+        await expect(api.deviceEvents(sa)).rejects.toThrow();
+        await expect(api.sessionEvents(da)).rejects.toThrow();
+
+        const code = await api.pairing(da);
+        await api.pair(
+          code.code,
+          sa,
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+        );
+        expect(take(seen.device)).toEqual(['links']);
+        expect(take(seen.session)).toEqual(['devices']);
+        expect((await api.deviceLinks(da)).links[0].name).toBe(
+          'Chrome en Windows',
+        );
+
+        await api.publish(
+          {
+            revision: 1,
+            profiles: [
+              {
+                id: 'anime',
+                label: 'Anime',
+                engine: 'direct',
+                isDefault: true,
+              },
+            ],
+          },
+          da,
+        );
+        expect(take(seen.session)).toEqual(['devices', 'requests']);
+        const dto = {
+          deviceId: device.id,
+          animeSlug: 'live-anime',
+          episodeNumbers: [1],
+          profileId: 'anime',
+          profileRevision: 1,
+          engine: 'direct',
+        };
+        const row = await api.create(dto, randomUUID(), sa);
+        expect(take(seen.device)).toEqual(['inbox']);
+        expect(take(seen.session)).toEqual(['requests']);
+        await api.ack(row.id, { status: 'accepted' }, da);
+        expect(take(seen.session)).toEqual(['requests']);
+        const second = await api.create(dto, randomUUID(), sa);
+        take(seen.device);
+        take(seen.session);
+        await api.cancel(second.id, sa);
+        expect(take(seen.device)).toEqual(['inbox']);
+        expect(take(seen.session)).toEqual(['requests']);
+
+        await api.revokeBrowser(session.id, da);
+        expect(take(seen.device)).toEqual(['links', 'inbox']);
+        expect(take(seen.session)).toEqual(['devices', 'requests']);
+        // Linked again without a known User-Agent: the generic name.
+        await api.pair((await api.pairing(da)).code, sa, 'curl/8.0');
+        expect((await api.deviceLinks(da)).links[0].name).toBe(
+          'Navegador vinculado',
+        );
+        take(seen.device);
+        take(seen.session);
+        await api.revoke(device.id, sa);
+        expect(take(seen.device)).toEqual(['links', 'inbox']);
+        expect(take(seen.session)).toEqual(['devices', 'requests']);
+        expect(strangerSeen).toEqual([]);
+      } finally {
+        for (const stream of streams) stream.unsubscribe();
+      }
     });
   },
 );

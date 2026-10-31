@@ -8,8 +8,11 @@ import {
   Param,
   Post,
   Put,
+  Req,
+  Sse,
 } from '@nestjs/common';
 import { RouteConfig } from '@nestjs/platform-fastify';
+import type { FastifyRequest } from 'fastify';
 import {
   ApiBearerAuth,
   ApiHeader,
@@ -17,6 +20,7 @@ import {
   ApiOkResponse,
   ApiCreatedResponse,
   ApiOperation,
+  ApiProduces,
 } from '@nestjs/swagger';
 import {
   DeviceRemoteRequestDto,
@@ -67,8 +71,22 @@ export class RemoteController {
   @Post('links')
   @RouteConfig({ rateLimit: { max: 5, timeWindow: '10 minutes' } })
   @ApiCreatedResponse({ type: RemoteLinkDto })
-  pair(@Body() dto: PairDeviceDto, @Headers('authorization') auth?: string) {
-    return this.remote.pair(dto.code, auth);
+  pair(
+    @Body() dto: PairDeviceDto,
+    // Read off the request: a header parameter would enter the contract.
+    @Req() request: FastifyRequest,
+    @Headers('authorization') auth?: string,
+  ) {
+    return this.remote.pair(dto.code, auth, request.headers['user-agent']);
+  }
+  @Sse('events')
+  @ApiProduces('text/event-stream')
+  @ApiOkResponse({
+    description:
+      'Server-sent events for this browser: `devices` (linked PCs changed) and `requests` (a request changed). Each says what to read again; read both when the stream opens. A comment line every 25 s keeps it open.',
+  })
+  sessionEvents(@Headers('authorization') auth?: string) {
+    return this.remote.sessionEvents(auth);
   }
   @Get('devices')
   @ApiOkResponse({ type: RemoteDevicesDto })
@@ -105,6 +123,15 @@ export class RemoteController {
     return this.remote
       .requests(auth)
       .then((value) => this.remote.withTitles(value));
+  }
+  @Sse('devices/me/events')
+  @ApiProduces('text/event-stream')
+  @ApiOkResponse({
+    description:
+      'Server-sent events for this PC: `inbox` (pending requests changed) and `links` (linked browsers changed). Each says what to read again; read both when the stream opens. While open, the PC counts as seen; a comment line every 25 s keeps it open.',
+  })
+  deviceEvents(@Headers('authorization') auth?: string) {
+    return this.remote.deviceEvents(auth);
   }
   @Get('devices/me/inbox')
   @ApiOkResponse({ type: DeviceRemoteRequestsDto })

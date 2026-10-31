@@ -49,6 +49,8 @@ describe('Remote HTTP security boundary', () => {
     expect(blocked.statusCode).toBe(429);
     expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
     expect(pair).toHaveBeenCalledTimes(5);
+    // The browser is named from the User-Agent of the request that links it.
+    expect(pair).toHaveBeenCalledWith('123456', undefined, 'lightMyRequest');
   });
   it('refuses local paths and provider settings before invoking the service', async () => {
     const result = await app.inject({

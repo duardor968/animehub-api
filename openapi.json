@@ -160,6 +160,32 @@
         "tags": ["remote desktop"]
       }
     },
+    "/api/v1/remote/events": {
+      "get": {
+        "operationId": "RemoteController_sessionEvents",
+        "parameters": [
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-sent events for this browser: `devices` (linked PCs changed) and `requests` (a request changed). Each says what to read again; read both when the stream opens. A comment line every 25 s keeps it open."
+          }
+        },
+        "security": [
+          {
+            "remoteCapability": []
+          }
+        ],
+        "tags": ["remote desktop"]
+      }
+    },
     "/api/v1/remote/devices/me/profiles": {
       "put": {
         "operationId": "RemoteController_profiles",
@@ -284,6 +310,32 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "remoteCapability": []
+          }
+        ],
+        "tags": ["remote desktop"]
+      }
+    },
+    "/api/v1/remote/devices/me/events": {
+      "get": {
+        "operationId": "RemoteController_deviceEvents",
+        "parameters": [
+          {
+            "name": "authorization",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-sent events for this PC: `inbox` (pending requests changed) and `links` (linked browsers changed). Each says what to read again; read both when the stream opens. While open, the PC counts as seen; a comment line every 25 s keeps it open."
           }
         },
         "security": [
@@ -1971,9 +2023,20 @@
           "lastSeenAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "Its live channel is open; for a PC without one, seen in the last 90 s"
           }
         },
-        "required": ["id", "name", "profileRevision", "profiles", "lastSeenAt"]
+        "required": [
+          "id",
+          "name",
+          "profileRevision",
+          "profiles",
+          "lastSeenAt",
+          "online"
+        ]
       },
       "RemoteDevicesDto": {
         "type": "object",

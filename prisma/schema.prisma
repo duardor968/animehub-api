@@ -359,12 +359,14 @@ model RemoteSession {
 }
 
 model RemoteLink {
-  sessionId String
-  deviceId  String
-  session   RemoteSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  device    RemoteDevice  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  revokedAt DateTime?
-  createdAt DateTime      @default(now())
+  sessionId   String
+  deviceId    String
+  session     RemoteSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  device      RemoteDevice  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  revokedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  // Browser and system at link time ("Chrome en Windows"), from its User-Agent.
+  browserName String?
 
   @@id([sessionId, deviceId])
 }

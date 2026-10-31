@@ -126,6 +126,11 @@ export class RemoteDeviceDto {
   @ApiProperty({ type: [DestinationProfileDto] })
   profiles!: DestinationProfileDto[];
   @ApiProperty({ format: 'date-time' }) lastSeenAt!: string;
+  @ApiProperty({
+    description:
+      'Its live channel is open; for a PC without one, seen in the last 90 s',
+  })
+  online!: boolean;
 }
 export class RemoteDevicesDto {
   @ApiProperty({ type: [RemoteDeviceDto] }) devices!: RemoteDeviceDto[];

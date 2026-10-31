@@ -6,8 +6,18 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
+import {
+  EMPTY,
+  catchError,
+  from,
+  ignoreElements,
+  interval,
+  mergeMap,
+} from 'rxjs';
 import { Prisma, RemoteRequest } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { browserName } from './browser-name';
+import { RemoteEvents, SessionEvent } from './remote-events';
 import {
   AckRemoteRequestDto,
   CreateRemoteRequestDto,
@@ -45,7 +55,10 @@ function publicRequest(row: RemoteRequest) {
 }
 @Injectable()
 export class RemoteService {
-  constructor(private readonly db: PrismaService) {}
+  constructor(
+    private readonly db: PrismaService,
+    private readonly events: RemoteEvents,
+  ) {}
   async withTitles<T extends { animeSlug: string }>(
     value: T,
   ): Promise<T & { animeTitle: string | null }>;
@@ -132,9 +145,12 @@ export class RemoteService {
       return { code, expiresAt };
     });
   }
-  pair(code: string, authorization?: string) {
-    return this.write(async (tx) => {
+  async pair(code: string, authorization?: string, userAgent?: string) {
+    const name = browserName(userAgent);
+    let sessionId = '';
+    const linked = await this.write(async (tx) => {
       const session = await this.session(tx, authorization);
+      sessionId = session.id;
       const pairing = await tx.remotePairing.findUnique({
         where: { codeHash: hash(code) },
       });
@@ -148,11 +164,18 @@ export class RemoteService {
             deviceId: pairing.deviceId,
           },
         },
-        create: { sessionId: session.id, deviceId: pairing.deviceId },
-        update: { revokedAt: null },
+        create: {
+          sessionId: session.id,
+          deviceId: pairing.deviceId,
+          browserName: name,
+        },
+        update: { revokedAt: null, browserName: name },
       });
       return { deviceId: pairing.deviceId };
     });
+    this.events.device(linked.deviceId, 'links');
+    this.events.session(sessionId, 'devices');
+    return linked;
   }
   async devices(authorization?: string) {
     const session = await this.session(this.db, authorization);
@@ -168,17 +191,26 @@ export class RemoteService {
         profileRevision: d.profileRevision,
         profiles: d.profiles,
         lastSeenAt: d.lastSeenAt,
+        // A PC with its channel is online exactly while it is open; one that only
+        // polls (older versions), while it was seen in the last 90 s.
+        online:
+          this.events.presence(d.id) ??
+          Date.now() - d.lastSeenAt.getTime() < 90000,
       })),
     };
   }
-  publish(dto: PublishProfilesDto, authorization?: string) {
+  async publish(dto: PublishProfilesDto, authorization?: string) {
     if (
       new Set(dto.profiles.map((p) => p.id)).size !== dto.profiles.length ||
       dto.profiles.filter((p) => p.isDefault).length > 1
     )
       throw new BadRequestException('Duplicate profile or default');
-    return this.write(async (tx) => {
+    let deviceId = '';
+    let revised = false;
+    const published = await this.write(async (tx) => {
       const device = await this.device(tx, authorization);
+      deviceId = device.id;
+      revised = dto.revision !== device.profileRevision;
       if (
         dto.revision < device.profileRevision ||
         (dto.revision === device.profileRevision &&
@@ -198,7 +230,7 @@ export class RemoteService {
           lastSeenAt: new Date(),
         },
       });
-      if (dto.revision !== device.profileRevision)
+      if (revised)
         await tx.remoteRequest.updateMany({
           where: {
             deviceId: device.id,
@@ -212,8 +244,16 @@ export class RemoteService {
         });
       return { revision: dto.revision };
     });
+    // A new revision also set the pending requests aside.
+    await this.notifyLinkedSessions(
+      deviceId,
+      ...(revised
+        ? (['devices', 'requests'] as const)
+        : (['devices'] as const)),
+    );
+    return published;
   }
-  create(
+  async create(
     dto: CreateRemoteRequestDto,
     key: string | undefined,
     authorization?: string,
@@ -239,8 +279,10 @@ export class RemoteService {
         dto.engine,
       ]),
     );
-    return this.write(async (tx) => {
+    let sessionId = '';
+    const created = await this.write(async (tx) => {
       const session = await this.session(tx, authorization);
+      sessionId = session.id;
       const link = await tx.remoteLink.findUnique({
         where: {
           sessionId_deviceId: { sessionId: session.id, deviceId: dto.deviceId },
@@ -280,6 +322,9 @@ export class RemoteService {
       });
       return publicRequest(row);
     });
+    this.events.device(created.deviceId, 'inbox');
+    this.events.session(sessionId, 'requests');
+    return created;
   }
   async requests(authorization?: string) {
     const session = await this.session(this.db, authorization);
@@ -334,13 +379,15 @@ export class RemoteService {
     if (!row) throw new NotFoundException();
     return publicRequest(row);
   }
-  ack(id: string, dto: AckRemoteRequestDto, authorization?: string) {
-    return this.write(async (tx) => {
+  async ack(id: string, dto: AckRemoteRequestDto, authorization?: string) {
+    let sessionId = '';
+    const acknowledged = await this.write(async (tx) => {
       const device = await this.device(tx, authorization);
       const row = await tx.remoteRequest.findFirst({
         where: { id, deviceId: device.id },
       });
       if (!row) throw new NotFoundException();
+      sessionId = row.sessionId;
       if (row.status === dto.status) return publicRequest(row);
       const link = await tx.remoteLink.findUnique({
         where: {
@@ -367,10 +414,14 @@ export class RemoteService {
         }),
       );
     });
+    this.events.session(sessionId, 'requests');
+    return acknowledged;
   }
-  cancel(id: string, authorization?: string) {
-    return this.write(async (tx) => {
+  async cancel(id: string, authorization?: string) {
+    let sessionId = '';
+    const cancelled = await this.write(async (tx) => {
       const session = await this.session(tx, authorization);
+      sessionId = session.id;
       const row = await tx.remoteRequest.findFirst({
         where: { id, sessionId: session.id },
       });
@@ -387,6 +438,9 @@ export class RemoteService {
         }),
       );
     });
+    this.events.device(cancelled.deviceId, 'inbox');
+    this.events.session(sessionId, 'requests');
+    return cancelled;
   }
   async deviceLinks(authorization?: string) {
     const device = await this.device(this.db, authorization);
@@ -397,14 +451,16 @@ export class RemoteService {
     return {
       links: links.map((link) => ({
         id: link.sessionId,
-        name: 'Navegador vinculado',
+        name: link.browserName ?? 'Navegador vinculado',
         createdAt: link.createdAt,
       })),
     };
   }
-  revokeBrowser(sessionId: string, authorization?: string) {
-    return this.write(async (tx) => {
+  async revokeBrowser(sessionId: string, authorization?: string) {
+    let deviceId = '';
+    const revoked = await this.write(async (tx) => {
       const device = await this.device(tx, authorization);
+      deviceId = device.id;
       const link = await tx.remoteLink.findUnique({
         where: { sessionId_deviceId: { sessionId, deviceId: device.id } },
       });
@@ -416,10 +472,15 @@ export class RemoteService {
       await this.reconcile(tx, device.id);
       return { id: sessionId, revoked: true };
     });
+    this.events.device(deviceId, 'links', 'inbox');
+    this.events.session(sessionId, 'devices', 'requests');
+    return revoked;
   }
-  revoke(deviceId: string, authorization?: string) {
-    return this.write(async (tx) => {
+  async revoke(deviceId: string, authorization?: string) {
+    let sessionId = '';
+    const revoked = await this.write(async (tx) => {
       const session = await this.session(tx, authorization);
+      sessionId = session.id;
       const link = await tx.remoteLink.findUnique({
         where: { sessionId_deviceId: { sessionId: session.id, deviceId } },
       });
@@ -431,5 +492,44 @@ export class RemoteService {
       await this.reconcile(tx, deviceId);
       return { deviceId, revoked: true };
     });
+    this.events.device(deviceId, 'links', 'inbox');
+    this.events.session(sessionId, 'devices', 'requests');
+    return revoked;
+  }
+  /** The PC's live channel; while it is open, the PC counts as seen. */
+  async deviceEvents(authorization?: string) {
+    const device = await this.device(this.db, authorization);
+    const seen = () =>
+      this.db.remoteDevice.update({
+        where: { id: device.id },
+        data: { lastSeenAt: new Date() },
+      });
+    await seen();
+    return this.events.deviceStream(
+      device.id,
+      interval(60000).pipe(
+        mergeMap(() => from(seen()).pipe(catchError(() => EMPTY))),
+        ignoreElements(),
+      ),
+      // Its browsers show it online or offline at once.
+      () =>
+        void this.notifyLinkedSessions(device.id, 'devices').catch(
+          () => undefined,
+        ),
+    );
+  }
+  async sessionEvents(authorization?: string) {
+    const session = await this.session(this.db, authorization);
+    return this.events.stream('session', session.id);
+  }
+  private async notifyLinkedSessions(
+    deviceId: string,
+    ...types: SessionEvent[]
+  ) {
+    const links = await this.db.remoteLink.findMany({
+      where: { deviceId, revokedAt: null },
+      select: { sessionId: true },
+    });
+    for (const { sessionId } of links) this.events.session(sessionId, ...types);
   }
 }
