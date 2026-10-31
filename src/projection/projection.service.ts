@@ -39,10 +39,11 @@ export function nextAnimeRefresh(
   now: Date,
   unchangedRefreshes = 0,
 ) {
+  // A paused series' return is due like a premiere.
   const minutes =
     status === 'AIRING'
       ? 15
-      : status === 'UPCOMING'
+      : status === 'UPCOMING' || status === 'PAUSED'
         ? 6 * 60
         : status === 'FINISHED'
           ? Math.min(30 * 2 ** unchangedRefreshes, 180) * 24 * 60

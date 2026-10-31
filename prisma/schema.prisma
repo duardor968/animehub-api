@@ -18,6 +18,7 @@ enum AnimeStatus {
   AIRING
   FINISHED
   UPCOMING
+  PAUSED
 }
 
 enum SourceAvailability {

@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import { SnapshotKind } from '../generated/prisma/enums';
 import { PrismaService } from '../prisma/prisma.service';
-import { ProjectionService } from './projection.service';
+import { nextAnimeRefresh, ProjectionService } from './projection.service';
 
 interface SnapshotState {
   id: string;
@@ -187,5 +187,15 @@ describe('ProjectionService.replaceSnapshot', () => {
     ).rejects.toThrow('createMany failed');
 
     expect(getCommitted()).toEqual(before);
+  });
+});
+
+describe('nextAnimeRefresh', () => {
+  it('rechecks a paused series as often as an upcoming one', () => {
+    const now = new Date('2026-10-31T12:00:00.000Z');
+    const hours = (status: Parameters<typeof nextAnimeRefresh>[0]) =>
+      (nextAnimeRefresh(status, now).getTime() - now.getTime()) / 3_600_000;
+    expect(hours('UPCOMING')).toBe(6);
+    expect(hours('PAUSED')).toBe(6);
   });
 });

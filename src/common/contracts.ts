@@ -41,7 +41,11 @@ export class AnimeSummaryDto {
   backdropSrcSet!: string | null;
   @ApiPropertyOptional({ type: CategoryDto, nullable: true })
   category!: CategoryDto | null;
-  @ApiProperty({ enum: ['UNKNOWN', 'AIRING', 'FINISHED', 'UPCOMING'] })
+  @ApiProperty({
+    enum: ['UNKNOWN', 'AIRING', 'FINISHED', 'UPCOMING', 'PAUSED'],
+    description:
+      'PAUSED: a series that already started and is between seasons.',
+  })
   status!: string;
   @ApiPropertyOptional({ type: String, nullable: true }) startDate!:
     string | null;

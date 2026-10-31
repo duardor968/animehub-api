@@ -164,36 +164,39 @@ describe('AnimeService episode freshness', () => {
     expect(response.meta.totalRecords).toBe(1);
   });
 
-  it('waits through an upcoming premiere and returns episode 1 instead of the cached empty list', async () => {
-    const premiereEpisode: SourceEpisode = {
-      id: 'episode-1',
-      number: 1,
-      title: 'Episode 1',
-      imageUrl: 'https://cdn.test/premiere.jpg',
-      sourcePath: '/media/airing-show/1',
-      publishedAt: new Date('2026-08-26T18:00:00.000Z'),
-    };
-    const { service, source } = createHarness({
-      status: 'UPCOMING',
-      initialEpisodes: [],
-      // The normal six-hour upcoming TTL has not elapsed, but AnimeAV1's exact
-      // nextDate says the premiere is already due.
-      nextRefreshAt: new Date(Date.now() + 2 * 60 * 60_000),
-      nextEpisodeAt: new Date(Date.now() - 60_000),
-    });
-    source.getAnime.mockResolvedValue({
-      ...sourceDetail,
-      status: 'AIRING',
-      episodeCount: 1,
-      episodes: [premiereEpisode],
-    });
+  it.each(['UPCOMING', 'PAUSED'] as const)(
+    'waits through a due %s return and returns its new episode instead of the cached list',
+    async (status) => {
+      const premiereEpisode: SourceEpisode = {
+        id: 'episode-1',
+        number: 1,
+        title: 'Episode 1',
+        imageUrl: 'https://cdn.test/premiere.jpg',
+        sourcePath: '/media/airing-show/1',
+        publishedAt: new Date('2026-08-26T18:00:00.000Z'),
+      };
+      const { service, source } = createHarness({
+        status,
+        initialEpisodes: [],
+        // The normal six-hour upcoming TTL has not elapsed, but AnimeAV1's exact
+        // nextDate says the premiere is already due.
+        nextRefreshAt: new Date(Date.now() + 2 * 60 * 60_000),
+        nextEpisodeAt: new Date(Date.now() - 60_000),
+      });
+      source.getAnime.mockResolvedValue({
+        ...sourceDetail,
+        status: 'AIRING',
+        episodeCount: 1,
+        episodes: [premiereEpisode],
+      });
 
-    const response = await service.getEpisodes('airing-show', 1);
+      const response = await service.getEpisodes('airing-show', 1);
 
-    expect(source.getAnime).toHaveBeenCalledTimes(1);
-    expect(response.data.map((episode) => episode.number)).toEqual([1]);
-    expect(response.meta.totalRecords).toBe(1);
-  });
+      expect(source.getAnime).toHaveBeenCalledTimes(1);
+      expect(response.data.map((episode) => episode.number)).toEqual([1]);
+      expect(response.meta.totalRecords).toBe(1);
+    },
+  );
 });
 
 describe('AnimeService episode bounds', () => {

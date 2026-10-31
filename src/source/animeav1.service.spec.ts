@@ -94,13 +94,69 @@ describe('AnimeAv1Service', () => {
 
     const { featured } = await service.getHome();
 
-    // 1 is "Próximamente" even for a series that started long ago.
     expect(featured.map((entry) => entry.status)).toEqual([
       'FINISHED',
-      'UPCOMING',
+      'PAUSED',
       'AIRING',
       'UNKNOWN',
     ]);
+  });
+
+  // Code 1 ("Próximamente") covers both an unreleased title and a series
+  // between seasons, such as One Piece after its last episode of the year.
+  describe('source code 1', () => {
+    const summary = (startDate?: string) =>
+      routeResponse({
+        featured: [
+          { id: 1, slug: 'anime-1', title: 'Anime 1', status: 1, startDate },
+        ],
+        latestEpisodes: [],
+        latestMedia: [],
+      });
+    const detail = (
+      episodes: Array<{ id: number; number: number }>,
+      startDate?: string,
+    ) =>
+      routeResponse({
+        media: {
+          id: 1,
+          slug: 'anime-1',
+          startDate,
+          title: 'Anime 1',
+          status: 1,
+          episodes,
+        },
+      });
+
+    it('is UPCOMING before the start date', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue(summary('2999-01-01'));
+      const { featured } = await service.getHome();
+      expect(featured[0]?.status).toBe('UPCOMING');
+    });
+
+    it('is PAUSED once the series has started', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue(summary('1999-10-20'));
+      const { featured } = await service.getHome();
+      expect(featured[0]?.status).toBe('PAUSED');
+    });
+
+    it('without dates, is PAUSED only when episodes exist', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue(summary());
+      expect((await service.getHome()).featured[0]?.status).toBe('UPCOMING');
+
+      vi.spyOn(global, 'fetch').mockResolvedValue(detail([]));
+      expect((await service.getAnime('anime-1')).status).toBe('UPCOMING');
+
+      vi.spyOn(global, 'fetch').mockResolvedValue(
+        detail([{ id: 10, number: 1 }]),
+      );
+      expect((await service.getAnime('anime-1')).status).toBe('PAUSED');
+    });
+
+    it('in details, follows the episodes over a passed premiere date', async () => {
+      vi.spyOn(global, 'fetch').mockResolvedValue(detail([], '2020-01-01'));
+      expect((await service.getAnime('anime-1')).status).toBe('UPCOMING');
+    });
   });
 
   it('keeps only supported providers and audio variants', async () => {

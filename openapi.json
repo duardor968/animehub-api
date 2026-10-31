@@ -805,6 +805,7 @@
             "name": "status",
             "required": false,
             "in": "query",
+            "description": "proximamente returns both UPCOMING and PAUSED anime.",
             "schema": {
               "enum": ["emision", "finalizado", "proximamente"],
               "type": "string"
@@ -2319,7 +2320,8 @@
           },
           "status": {
             "type": "string",
-            "enum": ["UNKNOWN", "AIRING", "FINISHED", "UPCOMING"]
+            "enum": ["UNKNOWN", "AIRING", "FINISHED", "UPCOMING", "PAUSED"],
+            "description": "PAUSED: a series that already started and is between seasons."
           },
           "startDate": {
             "type": "string",
@@ -2388,7 +2390,8 @@
           },
           "status": {
             "type": "string",
-            "enum": ["UNKNOWN", "AIRING", "FINISHED", "UPCOMING"]
+            "enum": ["UNKNOWN", "AIRING", "FINISHED", "UPCOMING", "PAUSED"],
+            "description": "PAUSED: a series that already started and is between seasons."
           },
           "startDate": {
             "type": "string",
@@ -2650,7 +2653,8 @@
           },
           "status": {
             "type": "string",
-            "enum": ["UNKNOWN", "AIRING", "FINISHED", "UPCOMING"]
+            "enum": ["UNKNOWN", "AIRING", "FINISHED", "UPCOMING", "PAUSED"],
+            "description": "PAUSED: a series that already started and is between seasons."
           },
           "startDate": {
             "type": "string",

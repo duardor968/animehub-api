@@ -1,4 +1,5 @@
-export type SourceStatus = 'UNKNOWN' | 'AIRING' | 'FINISHED' | 'UPCOMING';
+export type SourceStatus =
+  'UNKNOWN' | 'AIRING' | 'FINISHED' | 'UPCOMING' | 'PAUSED';
 
 export interface SourceCategory {
   id: string;

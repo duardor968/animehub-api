@@ -105,7 +105,7 @@ export class AnimeService {
     // single-flight refresh for airing series, within the same deadline.
     const now = new Date();
     const premiereIsDue =
-      anime.status === 'UPCOMING' &&
+      (anime.status === 'UPCOMING' || anime.status === 'PAUSED') &&
       anime.nextEpisodeAt !== null &&
       anime.nextEpisodeAt <= now;
     const canStillGainEpisodes = anime.status !== 'FINISHED';

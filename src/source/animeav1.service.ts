@@ -256,7 +256,7 @@ export class AnimeAv1Service {
     const media = data.media;
     const aliases = media.aka ? Object.values(media.aka).filter(Boolean) : [];
     return {
-      ...this.normalizeAnime(media),
+      ...this.normalizeAnime(media, media.episodes.length > 0),
       alternativeTitle: aliases[0] ?? null,
       trailerUrl: media.trailer
         ? `https://www.youtube.com/watch?v=${encodeURIComponent(media.trailer)}`
@@ -440,6 +440,7 @@ export class AnimeAv1Service {
 
   private normalizeAnime(
     input: z.infer<typeof animeSchema>,
+    hasEpisodes?: boolean,
   ): SourceAnimeSummary {
     const id = String(input.id);
     return {
@@ -453,7 +454,7 @@ export class AnimeAv1Service {
       genres: (input.genres ?? []).map((genre) =>
         this.normalizeCategory(genre),
       ),
-      status: this.normalizeStatus(input.status, input.startDate),
+      status: this.normalizeStatus(input.status, input.startDate, hasEpisodes),
       startDate: this.toDate(input.startDate),
       mature: input.mature ?? false,
     };
@@ -485,15 +486,23 @@ export class AnimeAv1Service {
   }
 
   // The codes behind the catalog filter: finalizado 0, proximamente 1, emision
-  // 2. A running series between seasons is 1 too: "Próximamente" on its page.
+  // 2. A running series between seasons is 1 too ("Próximamente" on its page),
+  // so 1 is PAUSED once the series has started. Details list episodes, and
+  // that decides: a premiere whose date passed with nothing uploaded is still
+  // upcoming. Summaries carry no episodes, only the startDate.
   private normalizeStatus(
     status: number | undefined,
     startDate?: string | null,
+    hasEpisodes?: boolean,
   ): SourceStatus {
-    if (status === 0) return 'FINISHED';
-    if (status === 1) return 'UPCOMING';
-    if (status === 2) return 'AIRING';
     const startsAt = this.toDate(startDate);
+    if (status === 0) return 'FINISHED';
+    if (status === 1) {
+      const started =
+        hasEpisodes ?? (startsAt !== null && startsAt <= new Date());
+      return started ? 'PAUSED' : 'UPCOMING';
+    }
+    if (status === 2) return 'AIRING';
     if (startsAt && startsAt > new Date()) return 'UPCOMING';
     return 'UNKNOWN';
   }

@@ -46,7 +46,12 @@ export class CatalogController {
     minLength: 1,
     maxLength: 1,
   })
-  @ApiQuery({ name: 'status', required: false, enum: catalogStatusValues })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: catalogStatusValues,
+    description: 'proximamente returns both UPCOMING and PAUSED anime.',
+  })
   @ApiQuery({
     name: 'genre',
     required: false,
