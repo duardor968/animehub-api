@@ -1,11 +1,16 @@
 import { ServiceUnavailableException } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { vi } from 'vitest';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectionService } from '../projection/projection.service';
 import { AnimeAv1Service } from '../source/animeav1.service';
 import { SOURCE_WAIT_MS } from '../source/source-wait';
 import type { SourceCatalog } from '../source/source.types';
-import { CatalogService, isDegenerateCatalogPage } from './catalog.service';
+import {
+  catalogYearRange,
+  CatalogService,
+  isDegenerateCatalogPage,
+} from './catalog.service';
 
 it('persists the relation graph fetched while enriching a new catalog entry', async () => {
   const entry = {
@@ -50,6 +55,12 @@ it('persists the relation graph fetched while enriching a new catalog entry', as
         .fn()
         .mockResolvedValueOnce(null)
         .mockResolvedValue(snapshot),
+    },
+    anime: {
+      aggregate: vi.fn().mockResolvedValue({
+        _min: { startDate: null },
+        _max: { startDate: null },
+      }),
     },
     category: { findMany: vi.fn().mockResolvedValue([]) },
     genre: { findMany: vi.fn().mockResolvedValue([]) },
@@ -122,6 +133,12 @@ describe('CatalogService out-of-range pages', () => {
         findUnique: vi.fn(() => Promise.resolve(snapshot)),
         update: vi.fn(() => Promise.resolve(snapshot)),
       },
+      anime: {
+        aggregate: vi.fn().mockResolvedValue({
+          _min: { startDate: null },
+          _max: { startDate: null },
+        }),
+      },
       category: {
         findMany: vi.fn(() => Promise.resolve([])),
         upsert: vi.fn(),
@@ -184,6 +201,14 @@ describe('CatalogService out-of-range pages', () => {
     });
     const prisma = {
       snapshot: { findUnique: vi.fn(() => Promise.resolve(snapshot)) },
+      anime: {
+        aggregate: vi.fn(() =>
+          Promise.resolve({
+            _min: { startDate: null },
+            _max: { startDate: null },
+          }),
+        ),
+      },
       category: { findMany: vi.fn(() => Promise.resolve([])) },
       genre: {
         findMany: vi.fn(() =>
@@ -278,6 +303,14 @@ describe('CatalogService source deadline', () => {
   function hangingSource(snapshot: object | null) {
     const prisma = {
       snapshot: { findUnique: vi.fn(() => Promise.resolve(snapshot)) },
+      anime: {
+        aggregate: vi.fn(() =>
+          Promise.resolve({
+            _min: { startDate: null },
+            _max: { startDate: null },
+          }),
+        ),
+      },
       category: { findMany: vi.fn(() => Promise.resolve([])) },
       genre: { findMany: vi.fn(() => Promise.resolve([])) },
     };
@@ -303,7 +336,7 @@ describe('CatalogService source deadline', () => {
     expect(source.getCatalog).toHaveBeenCalledOnce();
   });
 
-  it('serves a stale page at once while it refreshes', async () => {
+  it('serves a recently stale page at once while it refreshes', async () => {
     const { service, source } = hangingSource({
       id: 'stale',
       items: [],
@@ -311,8 +344,8 @@ describe('CatalogService source deadline', () => {
       totalRecords: 0,
       minYear: 1990,
       maxYear: 2026,
-      fetchedAt: new Date(Date.now() - 60 * 60_000),
-      nextRefreshAt: new Date(Date.now() - 30 * 60_000),
+      fetchedAt: new Date(Date.now() - 40 * 60_000),
+      nextRefreshAt: new Date(Date.now() - 10 * 60_000),
     });
 
     const response = await service.getCatalog({ page: 1, search: 'zombie' });
@@ -343,4 +376,195 @@ describe('CatalogService suggestions', () => {
     });
     expect(response.data).toEqual(data.slice(0, 8));
   });
+});
+
+describe('CatalogService long-stale pages', () => {
+  afterEach(() => vi.useRealTimers());
+
+  function harness(getCatalog: () => Promise<SourceCatalog>) {
+    const fetchedAt = new Date(Date.now() - 6 * 24 * 60 * 60_000);
+    let snapshot = {
+      id: 'default',
+      items: [],
+      totalPages: 0,
+      totalRecords: 0,
+      minYear: 1990,
+      maxYear: 2026,
+      fetchedAt,
+      nextRefreshAt: new Date(fetchedAt.getTime() + 30 * 60_000),
+    };
+    const prisma = {
+      snapshot: { findUnique: vi.fn(() => Promise.resolve(snapshot)) },
+      anime: {
+        aggregate: vi.fn(() =>
+          Promise.resolve({
+            _min: { startDate: null },
+            _max: { startDate: null },
+          }),
+        ),
+      },
+      category: { findMany: vi.fn(() => Promise.resolve([])), upsert: vi.fn() },
+      genre: { findMany: vi.fn(() => Promise.resolve([])), upsert: vi.fn() },
+    };
+    const projection = {
+      upsertAnime: vi.fn(),
+      replaceSnapshot: vi.fn(() => {
+        snapshot = {
+          ...snapshot,
+          fetchedAt: new Date(),
+          nextRefreshAt: new Date(Date.now() + 30 * 60_000),
+        };
+        return Promise.resolve(snapshot);
+      }),
+    };
+    const source = { getCatalog: vi.fn(getCatalog), getAnime: vi.fn() };
+    const service = new CatalogService(
+      prisma as unknown as PrismaService,
+      projection as unknown as ProjectionService,
+      source as unknown as AnimeAv1Service,
+    );
+    return { service, source, fetchedAt };
+  }
+
+  const sourcePage: SourceCatalog = {
+    results: [],
+    page: 1,
+    perPage: 20,
+    totalPages: 0,
+    totalRecords: 0,
+    categories: [],
+    genres: [],
+    years: [1990, 2026],
+  };
+
+  it('renews a page stored days ago before answering', async () => {
+    const { service, source, fetchedAt } = harness(() =>
+      Promise.resolve(sourcePage),
+    );
+
+    const response = await service.getCatalog({ page: 1 });
+
+    expect(source.getCatalog).toHaveBeenCalledOnce();
+    expect(new Date(response.meta.fetchedAt).getTime()).toBeGreaterThan(
+      fetchedAt.getTime(),
+    );
+    expect(response.meta.stale).toBe(false);
+  });
+
+  it('serves the old page when the source fails', async () => {
+    const { service, fetchedAt } = harness(() =>
+      Promise.reject(new Error('source down')),
+    );
+
+    const response = await service.getCatalog({ page: 1 });
+
+    expect(response.meta.fetchedAt).toBe(fetchedAt.toISOString());
+    expect(response.meta.stale).toBe(true);
+  });
+
+  it('serves the old page at the deadline while the source hangs', async () => {
+    vi.useFakeTimers();
+    const { service, fetchedAt } = harness(() => new Promise(() => {}));
+
+    const response = service.getCatalog({ page: 1 });
+    await vi.advanceTimersByTimeAsync(SOURCE_WAIT_MS);
+
+    expect((await response).meta.fetchedAt).toBe(fetchedAt.toISOString());
+  });
+});
+
+describe('catalogYearRange', () => {
+  it('widens the source range to every year stored', () => {
+    expect(
+      catalogYearRange([1990, 2026], {
+        min: new Date('1969-07-01T00:00:00Z'),
+        max: new Date('2027-01-01T00:00:00Z'),
+      }),
+    ).toEqual([1969, 2027]);
+  });
+
+  it('keeps the source range when nothing older or newer is stored', () => {
+    expect(
+      catalogYearRange([1990, 2026], {
+        min: new Date('1995-04-01T00:00:00Z'),
+        max: null,
+      }),
+    ).toEqual([1990, 2026]);
+  });
+});
+
+it('reports the same years for every query, from the anime stored now', async () => {
+  // Two pages refreshed at different times; the default one before the 1969
+  // work was stored, the filtered one after.
+  const page = (minYear: number) => ({
+    items: [],
+    totalPages: 0,
+    totalRecords: 0,
+    minYear,
+    maxYear: 2026,
+    fetchedAt: new Date(),
+    nextRefreshAt: new Date(Date.now() + 60_000),
+  });
+  const snapshots: Record<string, ReturnType<typeof page>> = {};
+  let oldest = new Date('1970-04-01T00:00:00Z');
+  const prisma = {
+    snapshot: {
+      findUnique: vi.fn(({ where }: { where: { key: string } }) =>
+        Promise.resolve(snapshots[where.key] ?? null),
+      ),
+    },
+    anime: {
+      aggregate: vi.fn(() =>
+        Promise.resolve({
+          _min: { startDate: oldest },
+          _max: { startDate: new Date('2026-10-25T00:00:00Z') },
+        }),
+      ),
+    },
+    category: { findMany: vi.fn().mockResolvedValue([]) },
+    genre: { findMany: vi.fn().mockResolvedValue([]) },
+  };
+  const projection = {
+    replaceSnapshot: vi.fn(
+      (
+        key: string,
+        _kind: unknown,
+        _items: unknown,
+        options: { minYear: number },
+      ) => {
+        snapshots[key] = page(options.minYear);
+        return Promise.resolve({});
+      },
+    ),
+  };
+  const source = {
+    getCatalog: vi.fn(() => {
+      // Refreshing this page stores the 1969 work.
+      oldest = new Date('1969-07-01T00:00:00Z');
+      return Promise.resolve({
+        results: [],
+        totalRecords: 0,
+        totalPages: 0,
+        categories: [],
+        genres: [],
+        years: [1990, 2026],
+      });
+    }),
+  };
+  const service = new CatalogService(
+    prisma as unknown as PrismaService,
+    projection as unknown as ProjectionService,
+    source as unknown as AnimeAv1Service,
+  );
+  // The default page, stored earlier with the range of its time.
+  const defaultKey = `catalog:${createHash('sha256').update('page=1').digest('hex')}`;
+  snapshots[defaultKey] = page(1970);
+
+  const before = await service.getCatalog({ page: 1 });
+  const filtered = await service.getCatalog({ page: 1, maxYear: 1989 });
+  const after = await service.getCatalog({ page: 1 });
+
+  expect(before.meta.years).toEqual([1970, 2026]);
+  expect(filtered.meta.years).toEqual([1969, 2026]);
+  expect(after.meta.years).toEqual(filtered.meta.years);
 });

@@ -36,10 +36,44 @@ export function isDegenerateCatalogPage(
   return (totalPages ?? 0) === 0 || requestedPage <= (totalPages ?? 0);
 }
 
+const CATALOG_TTL_MINUTES = 30;
+/**
+ * A page stored longer ago than this is renewed before answering, within the
+ * request's deadline: a quiet query would otherwise hand its next visitor a
+ * page from days ago. Younger stale pages are served while they refresh.
+ */
+const CATALOG_MAX_SERVED_AGE_MS = 2 * CATALOG_TTL_MINUTES * 60_000;
+
+type StoredYears = { min: Date | null; max: Date | null };
+
+/**
+ * Years the catalog filter offers. The source's own filter range starts at
+ * 1990 although it holds older works, so it widens to every year stored.
+ */
+export function catalogYearRange(
+  sourceYears: number[],
+  stored: StoredYears,
+): [number, number] {
+  const years = [
+    ...sourceYears,
+    stored.min?.getUTCFullYear(),
+    stored.max?.getUTCFullYear(),
+  ].filter((year): year is number => Number.isInteger(year));
+  if (years.length === 0) {
+    const thisYear = new Date().getUTCFullYear();
+    return [thisYear, thisYear];
+  }
+  return [Math.min(...years), Math.max(...years)];
+}
+
 @Injectable()
 export class CatalogService {
   private readonly logger = new Logger(CatalogService.name);
   private readonly refreshes = new Map<string, Promise<void>>();
+  // Every query reports the same years: read from the stored anime, shared
+  // until a refresh stores more or a TTL passes.
+  private storedYears: { value: Promise<StoredYears>; at: number } | null =
+    null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -52,25 +86,30 @@ export class CatalogService {
     const key = this.snapshotKey(params);
     const page = Number(params.get('page') ?? 1);
     let snapshot = await this.loadSnapshot(key);
-    // A cold or degenerate cache waits for the source, within the request's
-    // deadline; a stale one is served while it refreshes in the background.
-    if (!snapshot || this.isDegenerate(snapshot, page)) {
+    // A cold, degenerate or long-stale cache waits for the source, within the
+    // request's deadline; a recently stale one is served while it refreshes.
+    if (
+      !snapshot ||
+      this.isDegenerate(snapshot, page) ||
+      Date.now() - snapshot.fetchedAt.getTime() > CATALOG_MAX_SERVED_AGE_MS
+    ) {
       try {
         if (await waitForSource(this.refresh(key, params))) {
           snapshot = await this.loadSnapshot(key);
         }
       } catch {
-        // Source unavailable: the check below decides on what is stored.
+        // Logged by refresh(): the check below decides on what is stored.
       }
     } else if (snapshot.nextRefreshAt <= new Date()) {
-      this.refreshInBackground(key, params);
+      void this.refresh(key, params).catch(() => undefined);
     }
     if (!snapshot || this.isDegenerate(snapshot, page)) {
       throw new ServiceUnavailableException('Catalog data is unavailable.');
     }
-    const [categories, genres] = await Promise.all([
+    const [categories, genres, storedYears] = await Promise.all([
       this.prisma.category.findMany(),
       this.prisma.genre.findMany(),
+      this.loadStoredYears(),
     ]);
     return {
       data: snapshot.items.map(({ anime }) => serializeAnime(anime)),
@@ -82,10 +121,10 @@ export class CatalogService {
         capped: isCatalogCapped(snapshot.totalRecords),
         categories: sortByName(categories.map(serializeCategory)),
         genres: sortByName(genres.map(serializeCategory)),
-        years: [
-          snapshot.minYear ?? 1990,
-          snapshot.maxYear ?? new Date().getFullYear(),
-        ],
+        years: catalogYearRange(
+          [snapshot.minYear, snapshot.maxYear].filter((year) => year !== null),
+          storedYears,
+        ),
         fetchedAt: snapshot.fetchedAt.toISOString(),
         nextRefreshAt: snapshot.nextRefreshAt.toISOString(),
         stale: snapshot.nextRefreshAt <= new Date(),
@@ -149,16 +188,27 @@ export class CatalogService {
         SnapshotKind.CATALOG,
         anime.map((entry) => ({ animeId: entry.id })),
         {
-          ttlMinutes: 30,
+          ttlMinutes: CATALOG_TTL_MINUTES,
           totalPages: source.totalPages,
           totalRecords: source.totalRecords,
           minYear: source.years[0],
           maxYear: source.years[1],
         },
       );
-    })().finally(() => this.refreshes.delete(key));
-    this.refreshes.set(key, promise);
-    return promise;
+      // The anime just stored may widen the years.
+      this.storedYears = null;
+    })();
+    // Logged once per flight, whether a request waited for it or not.
+    void promise.catch((error: unknown) =>
+      this.logger.warn(
+        `Catalog refresh failed for ${key}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      ),
+    );
+    const flight = promise.finally(() => this.refreshes.delete(key));
+    this.refreshes.set(key, flight);
+    return flight;
   }
 
   private isDegenerate(
@@ -177,14 +227,24 @@ export class CatalogService {
     );
   }
 
-  private refreshInBackground(key: string, params: URLSearchParams) {
-    void this.refresh(key, params).catch((error) => {
-      this.logger.warn(
-        `Catalog refresh failed for ${key}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    });
+  private loadStoredYears() {
+    if (
+      !this.storedYears ||
+      Date.now() - this.storedYears.at > CATALOG_TTL_MINUTES * 60_000
+    ) {
+      const value = this.prisma.anime
+        .aggregate({ _min: { startDate: true }, _max: { startDate: true } })
+        .then(({ _min, _max }) => ({
+          min: _min.startDate,
+          max: _max.startDate,
+        }));
+      // A failed read is retried by the next request, not shared.
+      void value.catch(() => {
+        if (this.storedYears?.value === value) this.storedYears = null;
+      });
+      this.storedYears = { value, at: Date.now() };
+    }
+    return this.storedYears.value;
   }
 
   private loadSnapshot(key: string) {
