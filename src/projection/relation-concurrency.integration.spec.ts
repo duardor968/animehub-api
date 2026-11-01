@@ -169,6 +169,8 @@ describe.skipIf(!testUrl)(
         catalogProjection.upsertDetail.bind(catalogProjection);
       catalogProjection.upsertDetail = (anime) => track(upsertDetail(anime));
       const catalog = new CatalogService(
+        // Search pages only: the stored-catalog listing is not involved.
+        new ConfigService({ DATABASE_URL: testUrl }),
         prisma,
         catalogProjection,
         source as unknown as AnimeAv1Service,

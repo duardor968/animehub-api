@@ -52,6 +52,11 @@ export class HomeStore implements OnModuleDestroy {
     await this.client.$disconnect();
   }
 
+  /** The stored state of these anime (see summaryNeedsDetail). */
+  findStored(sourceIds: string[]) {
+    return this.projection.findStored(sourceIds, this.client);
+  }
+
   // Repeatable read spans Prisma's relation queries. A reader sees one complete
   // published generation, including its anime/episode data and freshness.
   // Prisma 7.10 sends those relation queries concurrently over the

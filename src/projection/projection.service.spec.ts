@@ -11,8 +11,6 @@ interface SnapshotState {
   nextRefreshAt: Date;
   totalPages?: number;
   totalRecords?: number;
-  minYear?: number;
-  maxYear?: number;
 }
 
 interface SnapshotItemState {
@@ -140,7 +138,7 @@ describe('ProjectionService.replaceSnapshot', () => {
         { animeId: 'new-anime', episodeId: 'episode-8' },
         { animeId: 'other-anime', episodeId: 'episode-10' },
       ],
-      { ttlMinutes: 4, fetchedAt, minYear: 1990, maxYear: 2026 },
+      { ttlMinutes: 4, fetchedAt, totalPages: 3, totalRecords: 41 },
     );
 
     const state = getCommitted();
@@ -149,8 +147,8 @@ describe('ProjectionService.replaceSnapshot', () => {
     expect(state.snapshot.nextRefreshAt).toEqual(
       new Date('2026-08-26T18:34:00.000Z'),
     );
-    expect(state.snapshot.minYear).toBe(1990);
-    expect(state.snapshot.maxYear).toBe(2026);
+    expect(state.snapshot.totalPages).toBe(3);
+    expect(state.snapshot.totalRecords).toBe(41);
     expect(state.items).toEqual([
       {
         snapshotId: 'snapshot-id',

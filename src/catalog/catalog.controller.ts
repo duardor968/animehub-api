@@ -30,7 +30,7 @@ export class CatalogController {
   @RouteConfig({ rateLimit: { max: 60, timeWindow: '1 minute' } })
   @ApiOperation({
     summary: 'Busca y filtra el catálogo paginado',
-    description: `La fuente sirve páginas de ${ANIMEAV1_CATALOG_PAGE_SIZE} y como máximo ${ANIMEAV1_CATALOG_MAX_RECORDS} resultados (${ANIMEAV1_CATALOG_MAX_PAGES} páginas) por consulta. Cuando una consulta coincide con más títulos, la fuente trunca el conjunto: meta.totalRecords se queda en ${ANIMEAV1_CATALOG_MAX_RECORDS}, las páginas posteriores a la ${ANIMEAV1_CATALOG_MAX_PAGES} llegan vacías y meta.capped es true. Para alcanzar el resto hay que acotar la consulta (inicial, años, género, formato o estado).`,
+    description: `Sin search responde el catálogo guardado completo, que un pase diario mantiene al día con la fuente: totalRecords es exacto, capped es false y meta.fetchedAt es el último pase completo. Varios géneros devuelven las obras que los tienen todos. order=title ordena alfabéticamente palabra por palabra, sin contar los signos iniciales, los acentos ni las mayúsculas y con los números por su valor; letter es la primera letra o cifra del título, sin acentos (# para las que empiezan por cifra). Con search responde la fuente, que sirve páginas de ${ANIMEAV1_CATALOG_PAGE_SIZE} y como máximo ${ANIMEAV1_CATALOG_MAX_RECORDS} resultados (${ANIMEAV1_CATALOG_MAX_PAGES} páginas): con más coincidencias, meta.totalRecords se queda en ${ANIMEAV1_CATALOG_MAX_RECORDS}, las páginas posteriores a la ${ANIMEAV1_CATALOG_MAX_PAGES} llegan vacías y meta.capped es true.`,
   })
   @ApiQuery({
     name: 'page',

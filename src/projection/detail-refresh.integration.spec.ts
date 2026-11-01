@@ -9,7 +9,7 @@ import { AnimeService } from '../anime/anime.service';
 import { AnimeAv1Service } from '../source/animeav1.service';
 import { SourceAnimeDetail } from '../source/source.types';
 import { ProjectionService } from './projection.service';
-import { RelationDiscoveryScheduler } from './relation-discovery.scheduler';
+import { DetailRefreshScheduler } from './detail-refresh.scheduler';
 
 const testUrl = process.env.TEST_DATABASE_URL;
 const schema = `relations_test_${randomUUID().replaceAll('-', '')}`;
@@ -37,7 +37,7 @@ const detail = (slug: string): SourceAnimeDetail => ({
 });
 
 describe.skipIf(!testUrl)(
-  'relation discovery PostgreSQL integration (isolated schema)',
+  'detail refresh PostgreSQL integration (isolated schema)',
   () => {
     let admin: Pool;
     let prisma: PrismaService;
@@ -78,7 +78,7 @@ describe.skipIf(!testUrl)(
       }
     });
 
-    it('discovers new→old from a recent snapshot, preserves old→new, and keeps unrelated titles separate', async () => {
+    it('discovers new→old for never fetched titles, preserves old→new, and keeps unrelated titles separate', async () => {
       const old = detail('old-finished');
       const other = detail('other-franchise');
       await projection.upsertDetail(old);
@@ -89,27 +89,21 @@ describe.skipIf(!testUrl)(
         { kind: 'SIDE_STORY', anime: other },
       ];
       const unrelated = detail('unrelated');
-      const seen = await Promise.all(
-        [newer, unrelated].map((entry) => projection.upsertAnime(entry)),
-      );
-      await projection.replaceSnapshot(
-        'home:discovery-test',
-        'HOME_RECENT_ANIME',
-        seen.map((entry) => ({ animeId: entry.id })),
-        { ttlMinutes: 10 },
-      );
+      // Listed but never fetched in detail.
+      for (const entry of [newer, unrelated])
+        await projection.upsertAnime(entry);
       const source = {
         getAnime: vi.fn((slug: string) =>
           Promise.resolve(slug === newer.slug ? newer : unrelated),
         ),
       };
-      const worker = new RelationDiscoveryScheduler(
+      const worker = new DetailRefreshScheduler(
         new ConfigService({ JOBS_ENABLED: 'false' }),
         prisma,
         source as unknown as AnimeAv1Service,
         projection,
       );
-      await worker.refreshObserved();
+      await worker.refreshDue();
       const api = new AnimeService(
         prisma,
         projection,
@@ -136,9 +130,9 @@ describe.skipIf(!testUrl)(
       expect((await api.getAnime(old.slug)).data.relations).toMatchObject([
         { kind: 'SEQUEL', anime: { slug: newer.slug } },
       ]);
-      await worker.refreshObserved();
+      await worker.refreshDue();
       expect(source.getAnime).toHaveBeenCalledTimes(2);
-    });
+    }, 15_000);
 
     it('keeps the last graph and freshness when a replacement fails', async () => {
       const owner = detail('rollback-owner');

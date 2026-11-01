@@ -105,15 +105,15 @@ export class CatalogMetaDto extends FreshnessDto {
   @ApiProperty() page!: number;
   @ApiProperty() perPage!: number;
   @ApiProperty({
-    description: `Pages reported by the source; never more than ${ANIMEAV1_CATALOG_MAX_PAGES}.`,
+    description: `Pages of the result set. A search reports the source's, never more than ${ANIMEAV1_CATALOG_MAX_PAGES}.`,
   })
   totalPages!: number;
   @ApiProperty({
-    description: `Records reported by the source; clamped at ${ANIMEAV1_CATALOG_MAX_RECORDS} (see capped).`,
+    description: `Anime matching the query. A search reports the source's count, clamped at ${ANIMEAV1_CATALOG_MAX_RECORDS} (see capped).`,
   })
   totalRecords!: number;
   @ApiProperty({
-    description: `true when the source truncated the result set at its maximum of ${ANIMEAV1_CATALOG_MAX_RECORDS} records / ${ANIMEAV1_CATALOG_MAX_PAGES} pages: more titles match than totalRecords and pages beyond ${ANIMEAV1_CATALOG_MAX_PAGES} are empty, so narrow the query (e.g. letter, year or genre filters) to reach them. totalRecords is then a lower bound ("${ANIMEAV1_CATALOG_MAX_RECORDS}+").`,
+    description: `true when a search matched more than the source serves (${ANIMEAV1_CATALOG_MAX_RECORDS} records / ${ANIMEAV1_CATALOG_MAX_PAGES} pages): pages beyond ${ANIMEAV1_CATALOG_MAX_PAGES} are empty and totalRecords is a lower bound ("${ANIMEAV1_CATALOG_MAX_RECORDS}+"). Always false without search: the whole stored catalog answers.`,
   })
   capped!: boolean;
   @ApiProperty({ type: [CategoryDto] }) categories!: CategoryDto[];

@@ -18,7 +18,8 @@ export interface SourceAnimeSummary {
   genres: SourceCategory[];
   status: SourceStatus;
   startDate: Date | null;
-  mature: boolean;
+  /** null where the source leaves it out (catalog listings). */
+  mature: boolean | null;
 }
 
 export interface SourceEpisode {

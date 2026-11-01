@@ -51,9 +51,56 @@ export function nextAnimeRefresh(
   return new Date(now.getTime() + minutes * 60_000);
 }
 
+/** What is compared with a listed summary (see summaryNeedsDetail). */
+export interface StoredSummary {
+  sourceId: string;
+  title: string;
+  synopsis: string | null;
+  detailFetchedAt: Date | null;
+  nextRefreshAt: Date;
+  category: { slug: string } | null;
+}
+
+/**
+ * A listed anime needs its detail when it was never fetched or when the
+ * listing shows a change since (title, synopsis or format). The detail
+ * worker keeps the rest fresh at each status's cadence.
+ */
+export function summaryNeedsDetail(
+  summary: SourceAnimeSummary,
+  stored: StoredSummary | undefined,
+) {
+  if (!stored?.detailFetchedAt) return true;
+  return (
+    stored.title !== summary.title ||
+    (summary.synopsis !== null && summary.synopsis !== stored.synopsis) ||
+    (summary.category !== null &&
+      summary.category.slug !== stored.category?.slug)
+  );
+}
+
 @Injectable()
 export class ProjectionService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /** The stored state of these listed anime, by source id. */
+  async findStored(
+    sourceIds: string[],
+    client: Prisma.TransactionClient = this.prisma,
+  ): Promise<Map<string, StoredSummary>> {
+    const rows = await client.anime.findMany({
+      where: { sourceId: { in: sourceIds } },
+      select: {
+        sourceId: true,
+        title: true,
+        synopsis: true,
+        detailFetchedAt: true,
+        nextRefreshAt: true,
+        category: { select: { slug: true } },
+      },
+    });
+    return new Map(rows.map((row) => [row.sourceId, row]));
+  }
 
   async upsertAnime(
     source: SourceAnimeSummary,
@@ -69,7 +116,6 @@ export class ProjectionService {
       title: source.title,
       posterUrl: source.posterUrl,
       backdropUrl: source.backdropUrl,
-      mature: source.mature,
       sourceUrl: `https://animeav1.com/media/${source.slug}`,
       lastSeenAt: now,
     };
@@ -79,6 +125,7 @@ export class ProjectionService {
       update: {
         ...seen,
         synopsis: source.synopsis ?? undefined,
+        mature: source.mature ?? undefined,
         status: source.status === 'UNKNOWN' ? undefined : source.status,
         availability: SourceAvailability.AVAILABLE,
         categoryId: category?.id,
@@ -89,6 +136,7 @@ export class ProjectionService {
         ...seen,
         sourceId: source.id,
         synopsis: source.synopsis,
+        mature: source.mature ?? false,
         status: source.status,
         categoryId: category?.id ?? null,
         startDate: source.startDate,
@@ -217,8 +265,6 @@ export class ProjectionService {
       ttlMinutes: number;
       totalPages?: number;
       totalRecords?: number;
-      minYear?: number;
-      maxYear?: number;
       fetchedAt?: Date;
     },
   ) {
@@ -233,8 +279,6 @@ export class ProjectionService {
       nextRefreshAt: new Date(now.getTime() + options.ttlMinutes * 60_000),
       totalPages: options.totalPages,
       totalRecords: options.totalRecords,
-      minYear: options.minYear,
-      maxYear: options.maxYear,
     };
     return this.prisma.$transaction(async (transaction) => {
       const snapshot = await transaction.snapshot.upsert({

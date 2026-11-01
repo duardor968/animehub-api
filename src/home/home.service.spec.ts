@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
 import { SnapshotKind } from '../generated/prisma/enums';
+import type { StoredSummary } from '../projection/projection.service';
 import { AnimeAv1Service } from '../source/animeav1.service';
 import type {
   SourceAnimeSummary,
@@ -119,6 +120,7 @@ function createHarness() {
     release: vi.fn(() => Promise.resolve()),
     publish: vi.fn(() => Promise.resolve({ published: 3, partial: false })),
     enrichDetail: vi.fn(() => Promise.resolve()),
+    findStored: vi.fn(() => Promise.resolve(new Map<string, StoredSummary>())),
   };
   const source = {
     getHome: vi.fn<() => Promise<SourceHome>>().mockResolvedValue(sourceHome),
@@ -348,6 +350,54 @@ describe('HomeService cache-only reads and coordinated refresh', () => {
     expect(signal.aborted).toBe(true);
     expect(store.publish).toHaveBeenCalledTimes(1);
     expect(store.enrichDetail).not.toHaveBeenCalled();
+  });
+
+  it('fetches only the details not stored or out of date', async () => {
+    const { service, source, store, detail } = createHarness();
+    detail.mockImplementation(() => Promise.resolve(sourceAnime as never));
+    const anime = (id: string, title = id) => ({
+      ...sourceAnime,
+      id,
+      slug: id,
+      title,
+    });
+    const stored = (id: string, nextRefreshAt: Date) => ({
+      sourceId: id,
+      title: id,
+      synopsis: sourceAnime.synopsis,
+      detailFetchedAt: new Date(Date.now() - 60_000),
+      nextRefreshAt,
+      category: { slug: 'tv-anime' },
+    });
+    const later = new Date(Date.now() + 60_000);
+    const earlier = new Date(Date.now() - 1_000);
+    source.getHome.mockResolvedValue({
+      ...sourceHome,
+      featured: [anime('featured-current'), anime('featured-due')],
+      recentAnime: [
+        anime('recent-current'),
+        anime('recent-new'),
+        anime('recent-renamed', 'Renamed'),
+        // Due by its cadence, but a recent card shows nothing that changed.
+        anime('recent-due'),
+      ],
+    });
+    store.findStored.mockResolvedValue(
+      new Map([
+        ['featured-current', stored('featured-current', later)],
+        ['featured-due', stored('featured-due', earlier)],
+        ['recent-current', stored('recent-current', later)],
+        ['recent-renamed', stored('recent-renamed', later)],
+        ['recent-due', stored('recent-due', earlier)],
+      ]),
+    );
+
+    await service.refreshIfDue();
+
+    expect(
+      (detail.mock.calls as unknown as [string][]).map(([slug]) => slug).sort(),
+    ).toEqual(['featured-due', 'recent-new', 'recent-renamed']);
+    expect(store.enrichDetail).toHaveBeenCalledTimes(3);
   });
 
   it('schedules the next durable due date, including full home between episode refreshes', async () => {

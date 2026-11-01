@@ -12,6 +12,7 @@ import {
   serializeEpisode,
   serializeFeatured,
 } from '../common/serializers';
+import { summaryNeedsDetail } from '../projection/projection.service';
 import type { SourceHome } from '../source/source.types';
 import { AnimeAv1Service } from '../source/animeav1.service';
 import {
@@ -239,12 +240,31 @@ export class HomeService implements OnModuleDestroy {
     signal: AbortSignal,
     deadline: number,
   ) {
+    const featured = home.featured.slice(0, 2);
+    let stored;
+    try {
+      stored = await this.store.findStored(
+        [...featured, ...home.recentAnime].map((anime) => anime.id),
+      );
+    } catch {
+      return; // Display metadata is best effort within this job's budget.
+    }
+    const now = new Date();
+    // Only what is not stored or is out of date. Featured anime show their
+    // episode count, renewed at their status's cadence.
     const candidates = [
       ...new Map(
         [
-          ...home.featured.slice(0, 2),
-          ...home.recentAnime.filter(
-            (anime) => !anime.startDate || !anime.category || !anime.synopsis,
+          ...featured.filter((anime) => {
+            const known = stored.get(anime.id);
+            return (
+              !known ||
+              summaryNeedsDetail(anime, known) ||
+              known.nextRefreshAt <= now
+            );
+          }),
+          ...home.recentAnime.filter((anime) =>
+            summaryNeedsDetail(anime, stored.get(anime.id)),
           ),
         ].map((anime) => [anime.slug, anime]),
       ).values(),

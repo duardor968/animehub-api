@@ -221,10 +221,13 @@ export class AnimeAv1Service {
     };
   }
 
-  async getCatalog(params: URLSearchParams): Promise<SourceCatalog> {
+  async getCatalog(
+    params: URLSearchParams,
+    signal?: AbortSignal,
+  ): Promise<SourceCatalog> {
     const data = this.parse(
       catalogSchema,
-      await this.fetchRoute('/catalogo', params),
+      await this.fetchRoute('/catalogo', params, signal),
       '/catalogo',
     );
     return {
@@ -456,7 +459,8 @@ export class AnimeAv1Service {
       ),
       status: this.normalizeStatus(input.status, input.startDate, hasEpisodes),
       startDate: this.toDate(input.startDate),
-      mature: input.mature ?? false,
+      // Listings and the home's newest anime leave it out.
+      mature: input.mature ?? null,
     };
   }
 

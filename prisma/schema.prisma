@@ -200,6 +200,8 @@ model Snapshot {
   nextRefreshAt DateTime
   totalPages    Int?
   totalRecords  Int?
+  // Unused since the catalog is served from Anime; dropped once rollback
+  // past 20261101120000_catalog_from_database is no longer needed.
   minYear       Int?
   maxYear       Int?
   items         SnapshotItem[]
@@ -322,8 +324,9 @@ model MediaAsset {
   checkedAt DateTime         @default(now())
 }
 
-// One durable lease coordinates all full/recent home refreshes across replicas.
-// A token fences publishers; failed and partial runs share bounded backoff.
+// Durable leases that keep a job to one process across replicas: key "home"
+// for all full/recent home refreshes (a token fences publishers; failed and
+// partial runs share bounded backoff), "catalog-pass" for the daily pass.
 model HomeRefreshLease {
   key           String   @id
   token         String?
