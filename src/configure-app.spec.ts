@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Module, Post } from '@nestjs/common';
+import { Body, Controller, Get, Logger, Module, Post } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { NestFastifyApplication, RouteConfig } from '@nestjs/platform-fastify';
 import { API_CACHE_CONTROL } from './common/no-store.interceptor';
 import { RETRY_AFTER_SECONDS } from './common/problem-details.filter';
 import { configureApp } from './configure-app';
+import { Prisma } from './generated/prisma/client';
 import { createFastifyAdapter } from './fastify-adapter';
 import {
   DownloadJobsController,
@@ -42,6 +43,30 @@ class ProbeController {
   @Get('source-missing')
   sourceMissing() {
     throw new AnimeAv1NotFoundError('/media/zz');
+  }
+
+  @Get('database-statement-timeout')
+  databaseStatementTimeout() {
+    throw new Prisma.PrismaClientKnownRequestError('Database error', {
+      code: 'P2039',
+      clientVersion: '7.10.0',
+      meta: {
+        driverAdapterError: { cause: { originalCode: '57014' } },
+      },
+    });
+  }
+
+  @Get('database-connect-timeout')
+  databaseConnectTimeout() {
+    throw new Error('Connection terminated due to connection timeout');
+  }
+
+  @Get('database-constraint')
+  databaseConstraint() {
+    throw new Prisma.PrismaClientKnownRequestError('Unique constraint', {
+      code: 'P2002',
+      clientVersion: '7.10.0',
+    });
   }
 
   @Get('bug')
@@ -120,6 +145,37 @@ describe('HTTP error mapping through Nest + Fastify', () => {
       detail: 'AnimeAV1 is temporarily unavailable.',
     });
     expect(missing.statusCode).toBe(404);
+  });
+
+  it('answers 503 with Retry-After, logged once, when the database does not answer in time', async () => {
+    const warn = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+
+    for (const route of ['statement-timeout', 'connect-timeout']) {
+      warn.mockClear();
+      const response = await app.inject({
+        url: `/api/v1/probe/database-${route}`,
+      });
+
+      expect(response.statusCode).toBe(503);
+      expect(response.headers['retry-after']).toBe(String(RETRY_AFTER_SECONDS));
+      expect(response.json()).toMatchObject({
+        status: 503,
+        detail: 'The database is temporarily unavailable.',
+      });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain('database unavailable');
+    }
+  });
+
+  it('keeps 500 for other database errors', async () => {
+    vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    const response = await app.inject({
+      url: '/api/v1/probe/database-constraint',
+    });
+
+    expect(response.statusCode).toBe(500);
   });
 
   it('keeps 500 for genuine bugs without leaking their message', async () => {

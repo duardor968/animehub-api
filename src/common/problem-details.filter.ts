@@ -9,6 +9,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { FastifyReply, FastifyRequest } from 'fastify';
+import { databaseUnavailableReason } from '../prisma/database-unavailable';
 import {
   AnimeAv1NotFoundError,
   AnimeAv1UnavailableError,
@@ -31,7 +32,8 @@ function hasHttpStatusCode(
 
 /**
  * Normalizes anything thrown into an HttpException; `null` means a genuine
- * internal error (500). Upstream failures become 404/503, and errors raised by
+ * internal error (500). Upstream failures and a database that did not answer
+ * in time become 404/503, and errors raised by
  * Fastify plugins/parsers keep the status they carry: Nest's Fastify adapter
  * only maps errors named `FastifyError`, so e.g. @fastify/rate-limit's 429 or a
  * JSON body SyntaxError (400) would otherwise surface as 500.
@@ -44,6 +46,11 @@ export function toHttpException(exception: unknown): HttpException | null {
   if (exception instanceof AnimeAv1UnavailableError) {
     return new ServiceUnavailableException(
       'AnimeAV1 is temporarily unavailable.',
+    );
+  }
+  if (databaseUnavailableReason(exception)) {
+    return new ServiceUnavailableException(
+      'The database is temporarily unavailable.',
     );
   }
   if (hasHttpStatusCode(exception)) {
@@ -87,9 +94,14 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         exception instanceof Error ? exception.stack : undefined,
       );
     } else if (status > 500) {
+      const databaseReason = databaseUnavailableReason(exception);
       this.logger.warn(
         `${request.method} ${request.url} answered ${status}: ${
-          exception instanceof Error ? exception.message : String(exception)
+          databaseReason
+            ? `database unavailable (${databaseReason})`
+            : exception instanceof Error
+              ? exception.message
+              : String(exception)
         }`,
       );
     }
