@@ -7,6 +7,7 @@ import {
 } from '../source/animeav1.service';
 import {
   DownloadResolverService,
+  FORCED_REFRESH_MIN_MS,
   linkTtlMinutes,
   MISSING_AUDIO_RECHECK_MS,
   selectDownloadLinks,
@@ -98,14 +99,18 @@ describe('DownloadResolverService.resolveEpisode', () => {
       {} as AnimeService,
       { getEpisodeDownloads: source } as unknown as AnimeAv1Service,
     );
-    const resolve = (audio = RequestedAudioDto.SUB, deadline?: number) =>
+    const resolve = (
+      audio = RequestedAudioDto.SUB,
+      deadline?: number,
+      force = false,
+    ) =>
       service.resolveEpisode(
         'anime-1',
         'slug',
         1,
         audio,
         [ProviderDto.MEGA],
-        false,
+        force,
         deadline,
       );
     const stored = () => {
@@ -169,6 +174,34 @@ describe('DownloadResolverService.resolveEpisode', () => {
 
     answer({ links: [{ audio: 'SUB', provider: 'MEGA', url: 'new' }] });
     await vi.waitFor(() => expect(prisma.$transaction).toHaveBeenCalled());
+  });
+
+  it('honours a forced refresh only once a minute per episode', async () => {
+    const future = new Date(Date.now() + DAY);
+    const probe = (age: number) => ({
+      fetchedAt: new Date(Date.now() - age),
+      expiresAt: future,
+      stableSince: new Date(Date.now() - 10 * DAY),
+    });
+    const sourceLinks = { links: [] };
+
+    const recent = harness({
+      links: [link('SUB', 'sub', future)],
+      probe: probe(FORCED_REFRESH_MIN_MS - 5_000),
+      source: vi.fn(() => Promise.resolve(sourceLinks)),
+    });
+    await expect(
+      recent.resolve(RequestedAudioDto.SUB, undefined, true),
+    ).resolves.toMatchObject({ links: [{ url: 'sub' }] });
+    expect(recent.source).not.toHaveBeenCalled();
+
+    const old = harness({
+      links: [link('SUB', 'sub', future)],
+      probe: probe(FORCED_REFRESH_MIN_MS),
+      source: vi.fn(() => Promise.resolve(sourceLinks)),
+    });
+    await old.resolve(RequestedAudioDto.SUB, undefined, true);
+    expect(old.source).toHaveBeenCalledTimes(1);
   });
 
   it('re-probes for a missing audio only after an hour', async () => {

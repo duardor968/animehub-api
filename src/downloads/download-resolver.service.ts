@@ -30,6 +30,10 @@ type StoredEpisode = Prisma.EpisodeGetPayload<{
 // cached links lack re-probes once they are this old.
 export const MISSING_AUDIO_RECHECK_MS = 60 * 60_000;
 
+// A forced refresh (a manual retry) reaches the source at most this often per
+// episode, however many clients ask: newer links are served as stored.
+export const FORCED_REFRESH_MIN_MS = 60_000;
+
 /**
  * Minutes the links of an episode stay cached. Links that went unchanged for a
  * while rarely change again, so they stay a fifth of the time they have been
@@ -137,7 +141,8 @@ export class DownloadResolverService {
 
   /**
    * Resolves an episode from its cached links, refreshing them from the source
-   * when they expired, when `forceRefresh`, or when they lack the requested
+   * when they expired, when `forceRefresh` and they are older than
+   * FORCED_REFRESH_MIN_MS, or when they lack the requested
    * audio and are older than MISSING_AUDIO_RECHECK_MS. When the source fails,
    * or is still answering at `deadline`, the stored links are served even if
    * expired; only an episode with none stored fails.
@@ -168,8 +173,9 @@ export class DownloadResolverService {
     const audio: string = requestedAudio;
     const lacksAudio = !links.some((link) => link.audio === audio);
     if (
-      forceRefresh ||
       !probe ||
+      (forceRefresh &&
+        now.getTime() - probe.fetchedAt.getTime() >= FORCED_REFRESH_MIN_MS) ||
       probe.expiresAt <= now ||
       (lacksAudio &&
         now.getTime() - probe.fetchedAt.getTime() >= MISSING_AUDIO_RECHECK_MS)
