@@ -49,7 +49,9 @@ steps:
     depends_on: []
     commands:
       - git config --global --add safe.directory '*'
-      - if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --quiet --unshallow; fi
+      # The whole history, as the old gitleaks job saw it: the clone is shallow.
+      - git fetch --quiet --unshallow origin || [ "$(git rev-parse --is-shallow-repository)" = false ]
+      - git rev-list --count HEAD
       - gitleaks git --redact --verbose .
 
   containers:
