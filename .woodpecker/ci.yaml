@@ -1,0 +1,61 @@
+# CI in the KVM8 Woodpecker (https://ci.asrlabs.space). Coolify deploys main on its own.
+when:
+  - event: push
+    branch: [main, dev]
+  - event: [pull_request, manual]
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: animehub
+      POSTGRES_USER: animehub_dev
+      POSTGRES_PASSWORD: animehub_ci
+
+steps:
+  quality:
+    image: node:24.21.0
+    depends_on: []
+    environment:
+      DATABASE_URL: postgresql://animehub_dev:animehub_ci@127.0.0.1:5432/animehub
+      TEST_DATABASE_URL: postgresql://animehub_dev:animehub_ci@127.0.0.1:5432/animehub
+      PORT: '8000'
+      CORS_ORIGINS: http://localhost:3000
+      JOBS_ENABLED: 'false'
+      LOG_LEVEL: silent
+    commands:
+      # The shutdown test only accepts a database on localhost: forward it to the service.
+      - >-
+        node -e "const n=require('net');n.createServer(c=>{const s=n.connect(5432,'postgres');c.pipe(s).pipe(c);
+        c.on('error',()=>s.destroy());s.on('error',()=>c.destroy())}).listen(5432,'127.0.0.1')" &
+      - corepack enable && corepack prepare pnpm@12.10.1 --activate
+      - pnpm install --frozen-lockfile
+      - for i in $(seq 60); do pnpm prisma:migrate && break; [ "$${i}" = 60 ] && exit 1; sleep 2; done
+      - pnpm prisma:validate
+      - pnpm prisma:generate
+      - pnpm format:check
+      - pnpm lint
+      - pnpm typecheck
+      - pnpm test
+      - pnpm test:integration
+      - pnpm openapi:check
+      - pnpm test:audit
+      - pnpm audit:ci
+      - pnpm build
+      - pnpm test:shutdown
+
+  secrets:
+    image: zricethezav/gitleaks:v8.30.1
+    depends_on: []
+    commands:
+      - git config --global --add safe.directory '*'
+      - if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --quiet --unshallow; fi
+      - gitleaks git --redact --verbose .
+
+  containers:
+    image: woodpeckerci/plugin-docker-buildx:6.1.2
+    depends_on: []
+    settings:
+      repo: animehub-api
+      tags: test
+      dry_run: true
