@@ -28,8 +28,10 @@ steps:
       - >-
         node -e "const n=require('net');n.createServer(c=>{const s=n.connect(5432,'postgres');c.pipe(s).pipe(c);
         c.on('error',()=>s.destroy());s.on('error',()=>c.destroy())}).listen(5432,'127.0.0.1')" &
+      # pnpm and its package store live in the agent's persistent cache (/ci-cache).
+      - export COREPACK_HOME=/ci-cache/corepack
       - corepack enable && corepack prepare pnpm@12.10.1 --activate
-      - pnpm install --frozen-lockfile
+      - pnpm install --frozen-lockfile --store-dir /ci-cache/pnpm
       - for i in $(seq 60); do pnpm prisma:migrate && break; [ "$${i}" = 60 ] && exit 1; sleep 2; done
       - pnpm prisma:validate
       - pnpm prisma:generate
